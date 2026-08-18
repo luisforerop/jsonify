@@ -1,0 +1,9 @@
+{
+  "conventionalCommits.scopes": [
+    "config",
+    "schema"
+  ],
+  "chat.tools.terminal.autoApprove": {
+    "npx tsc": true
+  }
+}
