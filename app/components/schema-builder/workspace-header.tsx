@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type WorkspaceHeaderProps = {
   isEditing: boolean;
   onNewSchema: () => void;
@@ -21,6 +23,9 @@ export function WorkspaceHeader({
         {isEditing && (
           <span className="editing-indicator">Editing saved schema</span>
         )}
+        <Link className="button button-secondary" href="/form-filler">
+          Fill a form
+        </Link>
         <button
           className="button button-secondary"
           type="button"
