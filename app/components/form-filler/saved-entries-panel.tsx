@@ -28,7 +28,9 @@ export function SavedEntriesPanel({
 
   async function copyEntryValues(entry: FormEntry): Promise<void> {
     try {
-      await navigator.clipboard.writeText(JSON.stringify(entry.values, null, 2));
+      await navigator.clipboard.writeText(
+        JSON.stringify(entry.values, null, 2),
+      );
       setCopyState({ id: entry.id, status: "copied" });
     } catch {
       setCopyState({ id: entry.id, status: "error" });
