@@ -81,9 +81,13 @@ export function useFormEntries(): FormEntriesHook {
   const [error, setError] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  function readAllEntries(): FormEntry[] {
+    return parseFormEntries(window.localStorage.getItem(STORAGE_KEY));
+  }
+
   function read(): void {
     try {
-      setEntries(parseFormEntries(window.localStorage.getItem(STORAGE_KEY)));
+      setEntries(readAllEntries());
       setError(null);
     } catch {
       setError("Saved form entries are unavailable in this browser.");
@@ -122,11 +126,12 @@ export function useFormEntries(): FormEntriesHook {
       updatedAt: now,
     };
 
-    return persist([...entries, entry]) ? entry : null;
+    return persist([...readAllEntries(), entry]) ? entry : null;
   }
 
   function update(id: string, input: FormEntryInput): FormEntry | null {
-    const existingEntry = entries.find((entry) => entry.id === id);
+    const currentEntries = readAllEntries();
+    const existingEntry = currentEntries.find((entry) => entry.id === id);
 
     if (!existingEntry) {
       setError("The selected form entry no longer exists.");
@@ -141,7 +146,7 @@ export function useFormEntries(): FormEntriesHook {
       values: input.values,
       updatedAt: new Date().toISOString(),
     };
-    const nextEntries = entries.map((entry) =>
+    const nextEntries = currentEntries.map((entry) =>
       entry.id === id ? updatedEntry : entry,
     );
 
@@ -149,9 +154,10 @@ export function useFormEntries(): FormEntriesHook {
   }
 
   function remove(id: string): boolean {
-    const nextEntries = entries.filter((entry) => entry.id !== id);
+    const currentEntries = readAllEntries();
+    const nextEntries = currentEntries.filter((entry) => entry.id !== id);
 
-    if (nextEntries.length === entries.length) {
+    if (nextEntries.length === currentEntries.length) {
       setError("The selected form entry no longer exists.");
       return false;
     }

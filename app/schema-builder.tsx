@@ -6,6 +6,7 @@ import { SavedSchemasPanel } from "@/app/components/schema-builder/saved-schemas
 import { SchemaEditor } from "@/app/components/schema-builder/schema-editor";
 import { SchemaPreview } from "@/app/components/schema-builder/schema-preview";
 import { WorkspaceHeader } from "@/app/components/schema-builder/workspace-header";
+import { useProjects } from "@/hooks/use-projects";
 import { useSavedSchemas } from "@/hooks/use-saved-schemas";
 import {
   changeNodeType,
@@ -25,14 +26,21 @@ function createId(): string {
   );
 }
 
-export default function SchemaBuilder() {
+type SchemaBuilderProps = {
+  projectId: string;
+};
+
+export default function SchemaBuilder({ projectId }: SchemaBuilderProps) {
   const [schemaName, setSchemaName] = useState("");
   const [properties, setProperties] = useState<BuilderNode[]>([]);
   const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const { schemas, error, isLoaded, create, update, remove } =
-    useSavedSchemas();
+    useSavedSchemas(projectId);
+  const { projects } = useProjects();
+  const projectName =
+    projects.find((project) => project.id === projectId)?.name ?? null;
   const preview = createJsonSchema(
     useDeferredValue(schemaName),
     useDeferredValue(properties),
@@ -61,8 +69,8 @@ export default function SchemaBuilder() {
 
     const schema = createJsonSchema(schemaName, properties);
     const savedSchema = activeSchemaId
-      ? update(activeSchemaId, { name: schemaName.trim(), schema })
-      : create({ name: schemaName.trim(), schema });
+      ? update(activeSchemaId, { name: schemaName.trim(), schema, projectId })
+      : create({ name: schemaName.trim(), schema, projectId });
     if (savedSchema) {
       setActiveSchemaId(savedSchema.id);
       setNotice(
@@ -99,6 +107,8 @@ export default function SchemaBuilder() {
   return (
     <main className="workspace-shell">
       <WorkspaceHeader
+        projectId={projectId}
+        projectName={projectName}
         isEditing={activeSchemaId !== null}
         onNewSchema={startNewSchema}
         onSaveSchema={saveSchema}

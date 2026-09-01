@@ -7,6 +7,7 @@ import { FormPanel } from "@/app/components/form-filler/form-panel";
 import { SavedEntriesPanel } from "@/app/components/form-filler/saved-entries-panel";
 import { SchemaPickerPanel } from "@/app/components/form-filler/schema-picker-panel";
 import { useFormEntries } from "@/hooks/use-form-entries";
+import { useProjects } from "@/hooks/use-projects";
 import { useSavedSchemas } from "@/hooks/use-saved-schemas";
 import {
   addArrayItem,
@@ -21,7 +22,11 @@ import {
   type FormValues,
 } from "@/lib/schema-form";
 
-export default function FormFiller() {
+type FormFillerProps = {
+  projectId: string;
+};
+
+export default function FormFiller({ projectId }: FormFillerProps) {
   const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
   const [schemaName, setSchemaName] = useState<string | null>(null);
   const [entryName, setEntryName] = useState("");
@@ -32,15 +37,22 @@ export default function FormFiller() {
   const [nameMissing, setNameMissing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const { schemas, isLoaded: schemasLoaded } = useSavedSchemas();
+  const { schemas, isLoaded: schemasLoaded } = useSavedSchemas(projectId);
+  const { projects } = useProjects();
+  const activeProjectName =
+    projects.find((project) => project.id === projectId)?.name ?? null;
   const {
-    entries,
+    entries: allEntries,
     error,
     isLoaded: entriesLoaded,
     create,
     update,
     remove,
   } = useFormEntries();
+  const projectSchemaIds = new Set(schemas.map((schema) => schema.id));
+  const entries = allEntries.filter((entry) =>
+    projectSchemaIds.has(entry.schemaId),
+  );
 
   function loadSchema(id: string): void {
     const savedSchema = schemas.find((schema) => schema.id === id);
@@ -145,6 +157,8 @@ export default function FormFiller() {
   return (
     <main className="workspace-shell">
       <FormFillerHeader
+        projectId={projectId}
+        projectName={activeProjectName}
         isEditingEntry={activeEntryId !== null}
         onNewEntry={startNewEntry}
       />

@@ -1,12 +1,18 @@
 import Link from "next/link";
 
+import { Breadcrumb } from "@/app/components/shared/breadcrumb";
+
 type WorkspaceHeaderProps = {
+  projectId: string;
+  projectName: string | null;
   isEditing: boolean;
   onNewSchema: () => void;
   onSaveSchema: () => void;
 };
 
 export function WorkspaceHeader({
+  projectId,
+  projectName,
   isEditing,
   onNewSchema,
   onSaveSchema,
@@ -17,13 +23,20 @@ export function WorkspaceHeader({
         <span className="brand-mark" aria-hidden="true">
           {}
         </span>
-        <span>Jsonify</span>
+        <Breadcrumb
+          projectId={projectId}
+          projectName={projectName}
+          currentView="Schemas"
+        />
       </div>
       <div className="topbar-actions">
         {isEditing && (
           <span className="editing-indicator">Editing saved schema</span>
         )}
-        <Link className="button button-secondary" href="/form-filler">
+        <Link
+          className="button button-secondary"
+          href={`/projects/${projectId}/form-filler`}
+        >
           Fill a form
         </Link>
         <button

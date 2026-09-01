@@ -1,5 +1,5 @@
-import SchemaBuilder from "./schema-builder";
+import Projects from "./projects";
 
 export default function Home() {
-  return <SchemaBuilder />;
+  return <Projects />;
 }
