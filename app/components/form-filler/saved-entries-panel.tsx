@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 
-import type { FormEntry } from "@/hooks/use-form-entries";
+import type { SavedRecord } from "@/hooks/use-records";
 
 import { PanelHeading } from "@/app/components/schema-builder/panel-heading";
 
 type SavedEntriesPanelProps = {
-  entries: FormEntry[];
+  entries: SavedRecord[];
   activeEntryId: string | null;
   isLoaded: boolean;
   onOpenEntry: (id: string) => void;
@@ -26,7 +26,7 @@ export function SavedEntriesPanel({
     status: "copied" | "error";
   } | null>(null);
 
-  async function copyEntryValues(entry: FormEntry): Promise<void> {
+  async function copyEntryValues(entry: SavedRecord): Promise<void> {
     try {
       await navigator.clipboard.writeText(
         JSON.stringify(entry.values, null, 2),
@@ -40,15 +40,15 @@ export function SavedEntriesPanel({
   }
 
   return (
-    <aside className="preview-panel" aria-label="Saved form entries">
+    <aside className="preview-panel" aria-label="Saved records">
       <PanelHeading
         eyebrow="Submissions"
-        title="Saved entries"
+        title="Saved records"
         badge={String(entries.length)}
       />
-      {!isLoaded && <p className="status-copy">Loading local entries...</p>}
+      {!isLoaded && <p className="status-copy">Loading records...</p>}
       {isLoaded && entries.length === 0 && (
-        <p className="status-copy">Submitted form entries will appear here.</p>
+        <p className="status-copy">Submitted records will appear here.</p>
       )}
       <ul className="saved-list">
         {entries.map((entry) => (

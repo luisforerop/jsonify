@@ -2,12 +2,14 @@
 
 import { useDeferredValue, useState } from "react";
 
+import { ScopedTool } from "@/app/components/collections/scoped-tool";
 import { SavedSchemasPanel } from "@/app/components/schema-builder/saved-schemas-panel";
 import { SchemaEditor } from "@/app/components/schema-builder/schema-editor";
 import { SchemaPreview } from "@/app/components/schema-builder/schema-preview";
 import { WorkspaceHeader } from "@/app/components/schema-builder/workspace-header";
-import { useProjects } from "@/hooks/use-projects";
+import type { Collection } from "@/hooks/use-collections";
 import { useSavedSchemas } from "@/hooks/use-saved-schemas";
+import type { Workspace } from "@/hooks/use-workspaces";
 import {
   changeNodeType,
   createBuilderNode,
@@ -27,20 +29,40 @@ function createId(): string {
 }
 
 type SchemaBuilderProps = {
-  projectId: string;
+  workspaceSlug: string;
+  collectionSlug: string;
 };
 
-export default function SchemaBuilder({ projectId }: SchemaBuilderProps) {
+export default function SchemaBuilder({
+  workspaceSlug,
+  collectionSlug,
+}: SchemaBuilderProps) {
+  return (
+    <ScopedTool workspaceSlug={workspaceSlug} collectionSlug={collectionSlug}>
+      {({ workspace, collection }) => (
+        <SchemaBuilderInner workspace={workspace} collection={collection} />
+      )}
+    </ScopedTool>
+  );
+}
+
+type SchemaBuilderInnerProps = {
+  workspace: Workspace;
+  collection: Collection;
+};
+
+function SchemaBuilderInner({
+  workspace,
+  collection,
+}: SchemaBuilderInnerProps) {
   const [schemaName, setSchemaName] = useState("");
   const [properties, setProperties] = useState<BuilderNode[]>([]);
   const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
-  const { schemas, error, isLoaded, create, update, remove } =
-    useSavedSchemas(projectId);
-  const { projects } = useProjects();
-  const projectName =
-    projects.find((project) => project.id === projectId)?.name ?? null;
+  const { schemas, error, isLoaded, create, update, remove } = useSavedSchemas(
+    collection.id,
+  );
   const preview = createJsonSchema(
     useDeferredValue(schemaName),
     useDeferredValue(properties),
@@ -68,18 +90,18 @@ export default function SchemaBuilder({ projectId }: SchemaBuilderProps) {
     if (!validation.isValid) return;
 
     const schema = createJsonSchema(schemaName, properties);
+    const input = {
+      name: schemaName.trim(),
+      schema,
+      workspaceId: workspace.id,
+      collectionId: collection.id,
+    };
     const savedSchema = activeSchemaId
-      ? await update(activeSchemaId, {
-          name: schemaName.trim(),
-          schema,
-          projectId,
-        })
-      : await create({ name: schemaName.trim(), schema, projectId });
+      ? await update(activeSchemaId, input)
+      : await create(input);
     if (savedSchema) {
       setActiveSchemaId(savedSchema.id);
-      setNotice(
-        activeSchemaId ? "Schema updated locally." : "Schema saved locally.",
-      );
+      setNotice(activeSchemaId ? "Schema updated." : "Schema saved.");
     }
   }
 
@@ -111,8 +133,8 @@ export default function SchemaBuilder({ projectId }: SchemaBuilderProps) {
   return (
     <main className="workspace-shell">
       <WorkspaceHeader
-        projectId={projectId}
-        projectName={projectName}
+        workspace={workspace}
+        collection={collection}
         isEditing={activeSchemaId !== null}
         onNewSchema={startNewSchema}
         onSaveSchema={saveSchema}

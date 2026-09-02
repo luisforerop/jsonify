@@ -5,7 +5,8 @@ import { installCollectionFetchStub } from "./collection-fetch-stub";
 import { useSavedSchemas } from "./use-saved-schemas";
 
 const schema = { title: "Profile", type: "object" as const, properties: {} };
-const projectId = "project-1";
+const workspaceId = "workspace-1";
+const collectionId = "collection-1";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -15,28 +16,35 @@ afterEach(() => {
 describe("useSavedSchemas", () => {
   it("creates, updates, and deletes a saved schema through the API", async () => {
     const { store, calls } = installCollectionFetchStub("/api/schemas");
-    const { result } = renderHook(() => useSavedSchemas(projectId));
+    const { result } = renderHook(() => useSavedSchemas(collectionId));
     await waitFor(() => expect(result.current.isLoaded).toBe(true));
 
     let id = "";
     await act(async () => {
       id =
-        (await result.current.create({ name: "Profile", schema, projectId }))
-          ?.id ?? "";
+        (
+          await result.current.create({
+            name: "Profile",
+            schema,
+            workspaceId,
+            collectionId,
+          })
+        )?.id ?? "";
     });
     expect(result.current.schemas).toHaveLength(1);
     expect(store).toHaveLength(1);
     expect(calls.at(-1)).toMatchObject({
       method: "POST",
       url: "/api/schemas",
-      body: { name: "Profile", projectId },
+      body: { name: "Profile", workspaceId, collectionId },
     });
 
     await act(async () => {
       await result.current.update(id, {
         name: "Account",
         schema: { ...schema, title: "Account" },
-        projectId,
+        workspaceId,
+        collectionId,
       });
     });
     expect(result.current.schemas[0]?.name).toBe("Account");
@@ -47,14 +55,15 @@ describe("useSavedSchemas", () => {
     expect(result.current.schemas).toHaveLength(0);
   });
 
-  it("scopes the returned schemas to the given project", async () => {
+  it("scopes the returned schemas to the given collection", async () => {
     const { store } = installCollectionFetchStub("/api/schemas");
     store.push(
       {
         id: "a1",
         name: "Profile",
         schema,
-        projectId: "a",
+        workspaceId,
+        collectionId: "a",
         createdAt: "",
         updatedAt: "",
       },
@@ -62,7 +71,8 @@ describe("useSavedSchemas", () => {
         id: "b1",
         name: "Invoice",
         schema,
-        projectId: "b",
+        workspaceId,
+        collectionId: "b",
         createdAt: "",
         updatedAt: "",
       },
@@ -83,7 +93,7 @@ describe("useSavedSchemas", () => {
       "fetch",
       vi.fn(() => Promise.reject(new Error("network down"))),
     );
-    const { result } = renderHook(() => useSavedSchemas(projectId));
+    const { result } = renderHook(() => useSavedSchemas(collectionId));
 
     await waitFor(() => expect(result.current.isLoaded).toBe(true));
     expect(result.current.error).toBe(

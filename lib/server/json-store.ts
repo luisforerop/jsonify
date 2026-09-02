@@ -10,15 +10,23 @@ export type StoredRecord = {
 };
 
 export type Store = {
-  projects: StoredRecord[];
+  users: StoredRecord[];
+  workspaces: StoredRecord[];
+  collections: StoredRecord[];
   schemas: StoredRecord[];
-  formEntries: StoredRecord[];
+  records: StoredRecord[];
 };
 
 export type CollectionName = keyof Store;
 
-function emptyStore(): Store {
-  return { projects: [], schemas: [], formEntries: [] };
+export function emptyStore(): Store {
+  return {
+    users: [],
+    workspaces: [],
+    collections: [],
+    schemas: [],
+    records: [],
+  };
 }
 
 /**
@@ -52,9 +60,11 @@ function coerceStore(value: unknown): Store {
   if (typeof value !== "object" || value === null) return emptyStore();
   const candidate = value as Record<string, unknown>;
   return {
-    projects: coerceCollection(candidate.projects),
+    users: coerceCollection(candidate.users),
+    workspaces: coerceCollection(candidate.workspaces),
+    collections: coerceCollection(candidate.collections),
     schemas: coerceCollection(candidate.schemas),
-    formEntries: coerceCollection(candidate.formEntries),
+    records: coerceCollection(candidate.records),
   };
 }
 

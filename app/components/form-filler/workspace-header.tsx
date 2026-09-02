@@ -1,19 +1,21 @@
 import Link from "next/link";
 
 import { Breadcrumb } from "@/app/components/shared/breadcrumb";
+import type { Collection } from "@/hooks/use-collections";
+import type { Workspace } from "@/hooks/use-workspaces";
 
 type FormFillerHeaderProps = {
-  projectId: string;
-  projectName: string | null;
-  isEditingEntry: boolean;
-  onNewEntry: () => void;
+  workspace: Workspace;
+  collection: Collection;
+  isEditingRecord: boolean;
+  onNewRecord: () => void;
 };
 
 export function FormFillerHeader({
-  projectId,
-  projectName,
-  isEditingEntry,
-  onNewEntry,
+  workspace,
+  collection,
+  isEditingRecord,
+  onNewRecord,
 }: FormFillerHeaderProps) {
   return (
     <header className="topbar">
@@ -22,27 +24,29 @@ export function FormFillerHeader({
           {}
         </span>
         <Breadcrumb
-          projectId={projectId}
-          projectName={projectName}
+          workspaceSlug={workspace.slug}
+          workspaceName={workspace.name}
+          collectionSlug={collection.slug}
+          collectionName={collection.name}
           currentView="Forms"
         />
       </div>
       <div className="topbar-actions">
-        {isEditingEntry && (
-          <span className="editing-indicator">Editing saved entry</span>
+        {isEditingRecord && (
+          <span className="editing-indicator">Editing saved record</span>
         )}
         <Link
           className="button button-secondary"
-          href={`/projects/${projectId}`}
+          href={`/w/${workspace.slug}/${collection.slug}`}
         >
-          Back to project
+          Back to collection
         </Link>
         <button
           className="button button-secondary"
           type="button"
-          onClick={onNewEntry}
+          onClick={onNewRecord}
         >
-          New entry
+          New record
         </button>
       </div>
     </header>

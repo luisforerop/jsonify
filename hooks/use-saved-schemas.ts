@@ -10,7 +10,8 @@ export type SavedSchema = {
   id: string;
   name: string;
   schema: JsonSchema;
-  projectId: string;
+  workspaceId: string;
+  collectionId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -18,7 +19,8 @@ export type SavedSchema = {
 export type SavedSchemaInput = {
   name: string;
   schema: JsonSchema;
-  projectId: string;
+  workspaceId: string;
+  collectionId: string;
 };
 
 export type SavedSchemasHook = {
@@ -35,7 +37,7 @@ const LOAD_ERROR = "Saved schemas are unavailable right now.";
 const SAVE_ERROR = "Could not save your schema.";
 const MISSING_ERROR = "The selected schema no longer exists.";
 
-export function useSavedSchemas(projectId?: string): SavedSchemasHook {
+export function useSavedSchemas(collectionId?: string): SavedSchemasHook {
   const [allSchemas, setAllSchemas] = useState<SavedSchema[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -120,9 +122,9 @@ export function useSavedSchemas(projectId?: string): SavedSchemasHook {
   }
 
   const schemas =
-    projectId === undefined
+    collectionId === undefined
       ? allSchemas
-      : allSchemas.filter((schema) => schema.projectId === projectId);
+      : allSchemas.filter((schema) => schema.collectionId === collectionId);
 
   return { schemas, error, isLoaded, create, read, update, remove };
 }
