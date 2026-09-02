@@ -8,7 +8,10 @@ Provides durable, project-local persistence for projects, saved schemas, and for
 
 ### Requirement: Persist all collections in one project-local JSON file
 
-The system SHALL store the `projects`, `schemas`, and `formEntries` collections together in a single JSON file located inside the project directory. The file location SHALL be stable across restarts so the data survives server restarts and is visible in the working tree.
+The system SHALL store the `users`, `workspaces`, `collections`, `schemas`, and
+`records` collections together in a single JSON file located inside the project
+directory. The file location SHALL be stable across restarts so the data survives
+server restarts and is visible in the working tree.
 
 #### Scenario: Data survives a server restart
 
@@ -18,7 +21,7 @@ The system SHALL store the `projects`, `schemas`, and `formEntries` collections 
 #### Scenario: File is human-readable
 
 - **WHEN** the store writes the file
-- **THEN** the file contains formatted (indented) JSON with a top-level object exposing the `projects`, `schemas`, and `formEntries` collections
+- **THEN** the file contains formatted (indented) JSON with a top-level object exposing the `users`, `workspaces`, `collections`, `schemas`, and `records` collections
 
 ### Requirement: Tolerate a missing or malformed store file
 
@@ -50,7 +53,11 @@ The system SHALL apply writes to the store file one at a time so that concurrent
 
 ### Requirement: Expose CRUD over HTTP for each collection
 
-The system SHALL expose endpoints to list a collection, create a record in it, update a record by id, and delete a record by id, for each of projects, schemas, and form entries. Each created record SHALL receive a unique id and `createdAt`/`updatedAt` timestamps; each update SHALL refresh `updatedAt` without changing `createdAt` or `id`.
+The system SHALL expose endpoints to list a collection, create a record in it,
+update a record by id, and delete a record by id, for each of users, workspaces,
+collections, schemas, and records. Each created record SHALL receive a unique id
+and `createdAt`/`updatedAt` timestamps; each update SHALL refresh `updatedAt`
+without changing `createdAt` or `id`.
 
 #### Scenario: List a collection
 

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   createRecord,
+  emptyStore,
   listCollection,
   readStore,
   removeRecord,
@@ -26,41 +27,37 @@ afterEach(async () => {
 
 describe("json-store", () => {
   it("returns an empty store when the file does not exist", async () => {
-    expect(await readStore()).toEqual({
-      projects: [],
-      schemas: [],
-      formEntries: [],
-    });
+    expect(await readStore()).toEqual(emptyStore());
   });
 
   it("returns an empty store when the file is malformed", async () => {
     await writeFile(path.join(dataDir, "jsonify.json"), "{ not json", "utf8");
 
-    expect(await listCollection("projects")).toEqual([]);
+    expect(await listCollection("collections")).toEqual([]);
   });
 
   it("creates a record with an id and timestamps and persists formatted JSON", async () => {
-    const record = await createRecord("projects", { name: "Onboarding" });
+    const record = await createRecord("collections", { name: "Onboarding" });
 
     expect(record.id).toEqual(expect.any(String));
     expect(record.createdAt).toEqual(record.updatedAt);
-    expect(await listCollection("projects")).toHaveLength(1);
+    expect(await listCollection("collections")).toHaveLength(1);
 
     const raw = await readFile(path.join(dataDir, "jsonify.json"), "utf8");
     expect(raw.endsWith("\n")).toBe(true);
-    expect(raw).toContain('\n  "projects"');
+    expect(raw).toContain('\n  "collections"');
   });
 
   it("updates a record, refreshing updatedAt but keeping id and createdAt", async () => {
     const created = await createRecord("schemas", {
       name: "Profile",
-      projectId: "p1",
+      collectionId: "c1",
       schema: { type: "object" },
     });
 
     const updated = await updateRecord("schemas", created.id, {
       name: "Account",
-      projectId: "p1",
+      collectionId: "c1",
       schema: { type: "object" },
     });
 
@@ -70,35 +67,34 @@ describe("json-store", () => {
   });
 
   it("returns null when updating an unknown id and does not create a file", async () => {
-    expect(await updateRecord("projects", "missing", { name: "x" })).toBeNull();
-    expect(await readStore()).toEqual({
-      projects: [],
-      schemas: [],
-      formEntries: [],
-    });
+    expect(
+      await updateRecord("collections", "missing", { name: "x" }),
+    ).toBeNull();
+    expect(await readStore()).toEqual(emptyStore());
   });
 
   it("removes a record and reports whether anything was deleted", async () => {
-    const created = await createRecord("formEntries", {
+    const created = await createRecord("records", {
       name: "Entry",
+      collectionId: "c1",
       schemaId: "s1",
       schemaName: "Customer",
       values: {},
     });
 
-    expect(await removeRecord("formEntries", "missing")).toBe(false);
-    expect(await removeRecord("formEntries", created.id)).toBe(true);
-    expect(await listCollection("formEntries")).toHaveLength(0);
+    expect(await removeRecord("records", "missing")).toBe(false);
+    expect(await removeRecord("records", created.id)).toBe(true);
+    expect(await listCollection("records")).toHaveLength(0);
   });
 
   it("serializes concurrent writes so no record is lost", async () => {
     await Promise.all([
-      createRecord("projects", { name: "A" }),
-      createRecord("projects", { name: "B" }),
-      createRecord("projects", { name: "C" }),
+      createRecord("collections", { name: "A" }),
+      createRecord("collections", { name: "B" }),
+      createRecord("collections", { name: "C" }),
     ]);
 
-    const names = (await listCollection("projects"))
+    const names = (await listCollection("collections"))
       .map((record) => record.name)
       .sort();
     expect(names).toEqual(["A", "B", "C"]);

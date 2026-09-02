@@ -1,18 +1,20 @@
 import Link from "next/link";
 
 import { Breadcrumb } from "@/app/components/shared/breadcrumb";
+import type { Collection } from "@/hooks/use-collections";
+import type { Workspace } from "@/hooks/use-workspaces";
 
 type WorkspaceHeaderProps = {
-  projectId: string;
-  projectName: string | null;
+  workspace: Workspace;
+  collection: Collection;
   isEditing: boolean;
   onNewSchema: () => void;
   onSaveSchema: () => void;
 };
 
 export function WorkspaceHeader({
-  projectId,
-  projectName,
+  workspace,
+  collection,
   isEditing,
   onNewSchema,
   onSaveSchema,
@@ -24,8 +26,10 @@ export function WorkspaceHeader({
           {}
         </span>
         <Breadcrumb
-          projectId={projectId}
-          projectName={projectName}
+          workspaceSlug={workspace.slug}
+          workspaceName={workspace.name}
+          collectionSlug={collection.slug}
+          collectionName={collection.name}
           currentView="Schemas"
         />
       </div>
@@ -35,7 +39,7 @@ export function WorkspaceHeader({
         )}
         <Link
           className="button button-secondary"
-          href={`/projects/${projectId}/form-filler`}
+          href={`/w/${workspace.slug}/${collection.slug}/form-filler`}
         >
           Fill a form
         </Link>
