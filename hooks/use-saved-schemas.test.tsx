@@ -1,47 +1,93 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { installCollectionFetchStub } from "./collection-fetch-stub";
 import { useSavedSchemas } from "./use-saved-schemas";
 
 const schema = { title: "Profile", type: "object" as const, properties: {} };
+const projectId = "project-1";
 
 afterEach(() => {
-  window.localStorage.clear();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("useSavedSchemas", () => {
-  it("creates, reads, updates, and deletes a locally saved schema", async () => {
-    const { result, unmount } = renderHook(() => useSavedSchemas());
+  it("creates, updates, and deletes a saved schema through the API", async () => {
+    const { store, calls } = installCollectionFetchStub("/api/schemas");
+    const { result } = renderHook(() => useSavedSchemas(projectId));
     await waitFor(() => expect(result.current.isLoaded).toBe(true));
 
     let id = "";
-    act(() => {
-      id = result.current.create({ name: "Profile", schema })?.id ?? "";
+    await act(async () => {
+      id =
+        (await result.current.create({ name: "Profile", schema, projectId }))
+          ?.id ?? "";
     });
     expect(result.current.schemas).toHaveLength(1);
-    expect(
-      JSON.parse(
-        window.localStorage.getItem("jsonify.saved-schemas.v1") ?? "[]",
-      ),
-    ).toHaveLength(1);
+    expect(store).toHaveLength(1);
+    expect(calls.at(-1)).toMatchObject({
+      method: "POST",
+      url: "/api/schemas",
+      body: { name: "Profile", projectId },
+    });
 
-    act(() => {
-      result.current.update(id, {
+    await act(async () => {
+      await result.current.update(id, {
         name: "Account",
         schema: { ...schema, title: "Account" },
+        projectId,
       });
     });
     expect(result.current.schemas[0]?.name).toBe("Account");
 
-    unmount();
-    const loaded = renderHook(() => useSavedSchemas());
-    await waitFor(() =>
-      expect(loaded.result.current.schemas[0]?.name).toBe("Account"),
+    await act(async () => {
+      await result.current.remove(id);
+    });
+    expect(result.current.schemas).toHaveLength(0);
+  });
+
+  it("scopes the returned schemas to the given project", async () => {
+    const { store } = installCollectionFetchStub("/api/schemas");
+    store.push(
+      {
+        id: "a1",
+        name: "Profile",
+        schema,
+        projectId: "a",
+        createdAt: "",
+        updatedAt: "",
+      },
+      {
+        id: "b1",
+        name: "Invoice",
+        schema,
+        projectId: "b",
+        createdAt: "",
+        updatedAt: "",
+      },
     );
 
-    act(() => {
-      loaded.result.current.remove(id);
-    });
-    expect(loaded.result.current.schemas).toHaveLength(0);
+    const scopedToA = renderHook(() => useSavedSchemas("a"));
+    await waitFor(() => expect(scopedToA.result.current.isLoaded).toBe(true));
+    expect(scopedToA.result.current.schemas).toHaveLength(1);
+    expect(scopedToA.result.current.schemas[0]?.name).toBe("Profile");
+
+    const unscoped = renderHook(() => useSavedSchemas());
+    await waitFor(() => expect(unscoped.result.current.isLoaded).toBe(true));
+    expect(unscoped.result.current.schemas).toHaveLength(2);
+  });
+
+  it("surfaces an error when the API is unreachable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("network down"))),
+    );
+    const { result } = renderHook(() => useSavedSchemas(projectId));
+
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+    expect(result.current.error).toBe(
+      "Saved schemas are unavailable right now.",
+    );
   });
 });

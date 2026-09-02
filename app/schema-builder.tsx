@@ -61,7 +61,7 @@ export default function SchemaBuilder({ projectId }: SchemaBuilderProps) {
     );
   }
 
-  function saveSchema(): void {
+  async function saveSchema(): Promise<void> {
     const validation = validateSchema(schemaName, properties);
     setValidationErrors(validation.errors);
     setNotice(null);
@@ -69,8 +69,12 @@ export default function SchemaBuilder({ projectId }: SchemaBuilderProps) {
 
     const schema = createJsonSchema(schemaName, properties);
     const savedSchema = activeSchemaId
-      ? update(activeSchemaId, { name: schemaName.trim(), schema, projectId })
-      : create({ name: schemaName.trim(), schema, projectId });
+      ? await update(activeSchemaId, {
+          name: schemaName.trim(),
+          schema,
+          projectId,
+        })
+      : await create({ name: schemaName.trim(), schema, projectId });
     if (savedSchema) {
       setActiveSchemaId(savedSchema.id);
       setNotice(
@@ -97,8 +101,8 @@ export default function SchemaBuilder({ projectId }: SchemaBuilderProps) {
     setNotice(`Opened ${savedSchema.name}.`);
   }
 
-  function deleteSchema(id: string): void {
-    if (remove(id)) {
+  async function deleteSchema(id: string): Promise<void> {
+    if (await remove(id)) {
       if (id === activeSchemaId) startNewSchema();
       setNotice("Schema deleted.");
     }

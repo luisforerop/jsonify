@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import type { FormValues } from "@/lib/schema-form";
 
-const STORAGE_KEY = "jsonify.form-entries.v1";
+const API_BASE = "/api/form-entries";
 
 export type FormEntry = {
   id: string;
@@ -27,142 +27,98 @@ export type FormEntriesHook = {
   entries: FormEntry[];
   error: string | null;
   isLoaded: boolean;
-  create: (input: FormEntryInput) => FormEntry | null;
-  read: () => void;
-  update: (id: string, input: FormEntryInput) => FormEntry | null;
-  remove: (id: string) => boolean;
+  create: (input: FormEntryInput) => Promise<FormEntry | null>;
+  read: () => Promise<void>;
+  update: (id: string, input: FormEntryInput) => Promise<FormEntry | null>;
+  remove: (id: string) => Promise<boolean>;
 };
 
-function parseFormEntries(value: string | null): FormEntry[] {
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(value);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.filter(isFormEntry);
-  } catch {
-    return [];
-  }
-}
-
-function isFormEntry(value: unknown): value is FormEntry {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Partial<FormEntry>;
-  return (
-    typeof candidate.id === "string" &&
-    typeof candidate.name === "string" &&
-    typeof candidate.schemaId === "string" &&
-    typeof candidate.schemaName === "string" &&
-    typeof candidate.createdAt === "string" &&
-    typeof candidate.updatedAt === "string" &&
-    typeof candidate.values === "object" &&
-    candidate.values !== null
-  );
-}
-
-function createFormEntryId(): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `entry-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  );
-}
+const LOAD_ERROR = "Saved form entries are unavailable right now.";
+const SAVE_ERROR = "Could not save your form entry.";
+const MISSING_ERROR = "The selected form entry no longer exists.";
 
 export function useFormEntries(): FormEntriesHook {
   const [entries, setEntries] = useState<FormEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  function readAllEntries(): FormEntry[] {
-    return parseFormEntries(window.localStorage.getItem(STORAGE_KEY));
-  }
-
-  function read(): void {
+  async function read(): Promise<void> {
     try {
-      setEntries(readAllEntries());
+      const response = await fetch(API_BASE);
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      setEntries((await response.json()) as FormEntry[]);
       setError(null);
     } catch {
-      setError("Saved form entries are unavailable in this browser.");
+      setError(LOAD_ERROR);
     } finally {
       setIsLoaded(true);
     }
   }
 
   useEffect(() => {
-    const loadTimer = window.setTimeout(read, 0);
-
-    return () => window.clearTimeout(loadTimer);
+    void read();
   }, []);
 
-  function persist(nextEntries: FormEntry[]): boolean {
+  async function create(input: FormEntryInput): Promise<FormEntry | null> {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextEntries));
-      setEntries(nextEntries);
+      const response = await fetch(API_BASE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      const entry = (await response.json()) as FormEntry;
+      setEntries((current) => [...current, entry]);
+      setError(null);
+      return entry;
+    } catch {
+      setError(SAVE_ERROR);
+      return null;
+    }
+  }
+
+  async function update(
+    id: string,
+    input: FormEntryInput,
+  ): Promise<FormEntry | null> {
+    try {
+      const response = await fetch(`${API_BASE}/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (response.status === 404) {
+        setError(MISSING_ERROR);
+        return null;
+      }
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      const entry = (await response.json()) as FormEntry;
+      setEntries((current) =>
+        current.map((item) => (item.id === id ? entry : item)),
+      );
+      setError(null);
+      return entry;
+    } catch {
+      setError(SAVE_ERROR);
+      return null;
+    }
+  }
+
+  async function remove(id: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_BASE}/${id}`, { method: "DELETE" });
+      if (response.status === 404) {
+        setError(MISSING_ERROR);
+        return false;
+      }
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      setEntries((current) => current.filter((item) => item.id !== id));
       setError(null);
       return true;
     } catch {
-      setError("Could not save your form entry in this browser.");
+      setError(SAVE_ERROR);
       return false;
     }
-  }
-
-  function create(input: FormEntryInput): FormEntry | null {
-    const now = new Date().toISOString();
-    const entry: FormEntry = {
-      id: createFormEntryId(),
-      name: input.name,
-      schemaId: input.schemaId,
-      schemaName: input.schemaName,
-      values: input.values,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    return persist([...readAllEntries(), entry]) ? entry : null;
-  }
-
-  function update(id: string, input: FormEntryInput): FormEntry | null {
-    const currentEntries = readAllEntries();
-    const existingEntry = currentEntries.find((entry) => entry.id === id);
-
-    if (!existingEntry) {
-      setError("The selected form entry no longer exists.");
-      return null;
-    }
-
-    const updatedEntry: FormEntry = {
-      ...existingEntry,
-      name: input.name,
-      schemaId: input.schemaId,
-      schemaName: input.schemaName,
-      values: input.values,
-      updatedAt: new Date().toISOString(),
-    };
-    const nextEntries = currentEntries.map((entry) =>
-      entry.id === id ? updatedEntry : entry,
-    );
-
-    return persist(nextEntries) ? updatedEntry : null;
-  }
-
-  function remove(id: string): boolean {
-    const currentEntries = readAllEntries();
-    const nextEntries = currentEntries.filter((entry) => entry.id !== id);
-
-    if (nextEntries.length === currentEntries.length) {
-      setError("The selected form entry no longer exists.");
-      return false;
-    }
-
-    return persist(nextEntries);
   }
 
   return { entries, error, isLoaded, create, read, update, remove };

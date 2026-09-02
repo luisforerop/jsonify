@@ -17,24 +17,24 @@ export default function Projects() {
   const { schemas: allSchemas, remove: removeSchema } = useSavedSchemas();
   const { entries: allEntries, remove: removeEntry } = useFormEntries();
 
-  function createProject(): void {
+  async function createProject(): Promise<void> {
     const trimmed = newProjectName.trim();
     setNameMissing(!trimmed);
     setNotice(null);
     if (!trimmed) return;
 
-    const project = create({ name: trimmed });
+    const project = await create({ name: trimmed });
     if (project) {
       setNewProjectName("");
       setNotice(`Created "${project.name}".`);
     }
   }
 
-  function renameProject(id: string, name: string): void {
-    update(id, { name });
+  async function renameProject(id: string, name: string): Promise<void> {
+    await update(id, { name });
   }
 
-  function deleteProject(id: string): void {
+  async function deleteProject(id: string): Promise<void> {
     const projectSchemas = allSchemas.filter(
       (schema) => schema.projectId === id,
     );
@@ -42,15 +42,14 @@ export default function Projects() {
       projectSchemas.map((schema) => schema.id),
     );
 
-    for (const entry of allEntries) {
-      if (projectSchemaIds.has(entry.schemaId)) {
-        removeEntry(entry.id);
-      }
-    }
-    for (const schema of projectSchemas) {
-      removeSchema(schema.id);
-    }
-    if (remove(id)) {
+    await Promise.all([
+      ...allEntries
+        .filter((entry) => projectSchemaIds.has(entry.schemaId))
+        .map((entry) => removeEntry(entry.id)),
+      ...projectSchemas.map((schema) => removeSchema(schema.id)),
+    ]);
+
+    if (await remove(id)) {
       setNotice("Project deleted.");
     }
   }

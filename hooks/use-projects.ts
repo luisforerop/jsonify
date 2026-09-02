@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "jsonify.projects.v1";
+const API_BASE = "/api/projects";
 
 export type Project = {
   id: string;
@@ -19,136 +19,98 @@ export type ProjectsHook = {
   projects: Project[];
   error: string | null;
   isLoaded: boolean;
-  create: (input: ProjectInput) => Project | null;
-  read: () => void;
-  update: (id: string, input: ProjectInput) => Project | null;
-  remove: (id: string) => boolean;
+  create: (input: ProjectInput) => Promise<Project | null>;
+  read: () => Promise<void>;
+  update: (id: string, input: ProjectInput) => Promise<Project | null>;
+  remove: (id: string) => Promise<boolean>;
 };
 
-function parseProjects(value: string | null): Project[] {
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(value);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.filter(isProject);
-  } catch {
-    return [];
-  }
-}
-
-function isProject(value: unknown): value is Project {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Partial<Project>;
-  return (
-    typeof candidate.id === "string" &&
-    typeof candidate.name === "string" &&
-    typeof candidate.createdAt === "string" &&
-    typeof candidate.updatedAt === "string"
-  );
-}
-
-function createProjectId(): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `project-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  );
-}
+const LOAD_ERROR = "Saved projects are unavailable right now.";
+const SAVE_ERROR = "Could not save your project.";
+const MISSING_ERROR = "The selected project no longer exists.";
 
 export function useProjects(): ProjectsHook {
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  function readAllProjects(): Project[] {
-    return parseProjects(window.localStorage.getItem(STORAGE_KEY));
-  }
-
-  function read(): void {
+  async function read(): Promise<void> {
     try {
-      setProjects(readAllProjects());
+      const response = await fetch(API_BASE);
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      setProjects((await response.json()) as Project[]);
       setError(null);
     } catch {
-      setError("Saved projects are unavailable in this browser.");
+      setError(LOAD_ERROR);
     } finally {
       setIsLoaded(true);
     }
   }
 
   useEffect(() => {
-    const loadTimer = window.setTimeout(read, 0);
-
-    return () => window.clearTimeout(loadTimer);
+    void read();
   }, []);
 
-  function persist(nextProjects: Project[]): boolean {
+  async function create(input: ProjectInput): Promise<Project | null> {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextProjects));
-      setProjects(nextProjects);
+      const response = await fetch(API_BASE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      const project = (await response.json()) as Project;
+      setProjects((current) => [...current, project]);
+      setError(null);
+      return project;
+    } catch {
+      setError(SAVE_ERROR);
+      return null;
+    }
+  }
+
+  async function update(
+    id: string,
+    input: ProjectInput,
+  ): Promise<Project | null> {
+    try {
+      const response = await fetch(`${API_BASE}/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (response.status === 404) {
+        setError(MISSING_ERROR);
+        return null;
+      }
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      const project = (await response.json()) as Project;
+      setProjects((current) =>
+        current.map((item) => (item.id === id ? project : item)),
+      );
+      setError(null);
+      return project;
+    } catch {
+      setError(SAVE_ERROR);
+      return null;
+    }
+  }
+
+  async function remove(id: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_BASE}/${id}`, { method: "DELETE" });
+      if (response.status === 404) {
+        setError(MISSING_ERROR);
+        return false;
+      }
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      setProjects((current) => current.filter((item) => item.id !== id));
       setError(null);
       return true;
     } catch {
-      setError("Could not save your project in this browser.");
+      setError(SAVE_ERROR);
       return false;
     }
-  }
-
-  function create(input: ProjectInput): Project | null {
-    const now = new Date().toISOString();
-    const project: Project = {
-      id: createProjectId(),
-      name: input.name,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    return persist([...readAllProjects(), project]) ? project : null;
-  }
-
-  function update(id: string, input: ProjectInput): Project | null {
-    const currentProjects = readAllProjects();
-    const existingProject = currentProjects.find(
-      (project) => project.id === id,
-    );
-
-    if (!existingProject) {
-      setError("The selected project no longer exists.");
-      return null;
-    }
-
-    const updatedProject: Project = {
-      ...existingProject,
-      name: input.name,
-      updatedAt: new Date().toISOString(),
-    };
-    const nextProjects = currentProjects.map((project) =>
-      project.id === id ? updatedProject : project,
-    );
-
-    return persist(nextProjects) ? updatedProject : null;
-  }
-
-  function remove(id: string): boolean {
-    const currentProjects = readAllProjects();
-    const nextProjects = currentProjects.filter(
-      (project) => project.id !== id,
-    );
-
-    if (nextProjects.length === currentProjects.length) {
-      setError("The selected project no longer exists.");
-      return false;
-    }
-
-    return persist(nextProjects);
   }
 
   return { projects, error, isLoaded, create, read, update, remove };

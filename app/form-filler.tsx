@@ -114,7 +114,7 @@ export default function FormFiller({ projectId }: FormFillerProps) {
     setValues((current) => removeArrayItem(current, path, index));
   }
 
-  function submit(): void {
+  async function submit(): Promise<void> {
     if (!activeSchemaId || !schemaName) return;
 
     const trimmedName = entryName.trim();
@@ -125,13 +125,13 @@ export default function FormFiller({ projectId }: FormFillerProps) {
     if (!trimmedName || !validation.isValid) return;
 
     const savedEntry = activeEntryId
-      ? update(activeEntryId, {
+      ? await update(activeEntryId, {
           name: trimmedName,
           schemaId: activeSchemaId,
           schemaName,
           values,
         })
-      : create({
+      : await create({
           name: trimmedName,
           schemaId: activeSchemaId,
           schemaName,
@@ -147,8 +147,8 @@ export default function FormFiller({ projectId }: FormFillerProps) {
     }
   }
 
-  function deleteEntry(id: string): void {
-    if (remove(id)) {
+  async function deleteEntry(id: string): Promise<void> {
+    if (await remove(id)) {
       if (id === activeEntryId) startNewEntry();
       setNotice("Entry deleted.");
     }

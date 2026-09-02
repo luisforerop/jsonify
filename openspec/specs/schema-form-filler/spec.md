@@ -79,7 +79,7 @@ The system SHALL let a user give a saved form entry a name before it is submitte
 
 ### Requirement: Manage form entries through a persistence boundary
 
-The system SHALL expose create, read, update, and delete operations for saved form entries through external client-side hooks. The form-filler interface SHALL use those hooks rather than accessing browser localStorage directly, and SHALL limit the entries it displays to those whose source schema belongs to the active project. The initial hook implementation SHALL persist form entries in browser localStorage, and a saved form entry SHALL remain available after the browser page is reloaded in the same browser profile.
+The system SHALL expose create, read, update, and delete operations for saved form entries through external client-side hooks. The form-filler interface SHALL use those hooks rather than accessing browser localStorage directly, and SHALL limit the entries it displays to those whose source schema belongs to the active project. The hook implementation SHALL persist form entries in a project-local JSON file through the server, and its create, read, update, and delete operations SHALL be asynchronous. A saved form entry SHALL remain available after the browser page is reloaded, including from a different browser or machine using the same server.
 
 #### Scenario: List saved form entries
 

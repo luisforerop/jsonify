@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import type { JsonSchema } from "@/lib/schema-builder";
 
-const STORAGE_KEY = "jsonify.saved-schemas.v1";
+const API_BASE = "/api/schemas";
 
 export type SavedSchema = {
   id: string;
@@ -25,139 +25,98 @@ export type SavedSchemasHook = {
   schemas: SavedSchema[];
   error: string | null;
   isLoaded: boolean;
-  create: (input: SavedSchemaInput) => SavedSchema | null;
-  read: () => void;
-  update: (id: string, input: SavedSchemaInput) => SavedSchema | null;
-  remove: (id: string) => boolean;
+  create: (input: SavedSchemaInput) => Promise<SavedSchema | null>;
+  read: () => Promise<void>;
+  update: (id: string, input: SavedSchemaInput) => Promise<SavedSchema | null>;
+  remove: (id: string) => Promise<boolean>;
 };
 
-function parseSavedSchemas(value: string | null): SavedSchema[] {
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(value);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.filter(isSavedSchema);
-  } catch {
-    return [];
-  }
-}
-
-function isSavedSchema(value: unknown): value is SavedSchema {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Partial<SavedSchema>;
-  return (
-    typeof candidate.id === "string" &&
-    typeof candidate.name === "string" &&
-    typeof candidate.projectId === "string" &&
-    typeof candidate.createdAt === "string" &&
-    typeof candidate.updatedAt === "string" &&
-    typeof candidate.schema === "object" &&
-    candidate.schema !== null
-  );
-}
-
-function createSavedSchemaId(): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `schema-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  );
-}
+const LOAD_ERROR = "Saved schemas are unavailable right now.";
+const SAVE_ERROR = "Could not save your schema.";
+const MISSING_ERROR = "The selected schema no longer exists.";
 
 export function useSavedSchemas(projectId?: string): SavedSchemasHook {
   const [allSchemas, setAllSchemas] = useState<SavedSchema[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  function readAllSchemas(): SavedSchema[] {
-    return parseSavedSchemas(window.localStorage.getItem(STORAGE_KEY));
-  }
-
-  function read(): void {
+  async function read(): Promise<void> {
     try {
-      setAllSchemas(readAllSchemas());
+      const response = await fetch(API_BASE);
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      setAllSchemas((await response.json()) as SavedSchema[]);
       setError(null);
     } catch {
-      setError("Saved schemas are unavailable in this browser.");
+      setError(LOAD_ERROR);
     } finally {
       setIsLoaded(true);
     }
   }
 
   useEffect(() => {
-    const loadTimer = window.setTimeout(read, 0);
-
-    return () => window.clearTimeout(loadTimer);
+    void read();
   }, []);
 
-  function persist(nextSchemas: SavedSchema[]): boolean {
+  async function create(input: SavedSchemaInput): Promise<SavedSchema | null> {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSchemas));
-      setAllSchemas(nextSchemas);
+      const response = await fetch(API_BASE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      const savedSchema = (await response.json()) as SavedSchema;
+      setAllSchemas((current) => [...current, savedSchema]);
+      setError(null);
+      return savedSchema;
+    } catch {
+      setError(SAVE_ERROR);
+      return null;
+    }
+  }
+
+  async function update(
+    id: string,
+    input: SavedSchemaInput,
+  ): Promise<SavedSchema | null> {
+    try {
+      const response = await fetch(`${API_BASE}/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (response.status === 404) {
+        setError(MISSING_ERROR);
+        return null;
+      }
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      const savedSchema = (await response.json()) as SavedSchema;
+      setAllSchemas((current) =>
+        current.map((item) => (item.id === id ? savedSchema : item)),
+      );
+      setError(null);
+      return savedSchema;
+    } catch {
+      setError(SAVE_ERROR);
+      return null;
+    }
+  }
+
+  async function remove(id: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_BASE}/${id}`, { method: "DELETE" });
+      if (response.status === 404) {
+        setError(MISSING_ERROR);
+        return false;
+      }
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      setAllSchemas((current) => current.filter((item) => item.id !== id));
       setError(null);
       return true;
     } catch {
-      setError("Could not save your schema in this browser.");
+      setError(SAVE_ERROR);
       return false;
     }
-  }
-
-  function create(input: SavedSchemaInput): SavedSchema | null {
-    const now = new Date().toISOString();
-    const savedSchema: SavedSchema = {
-      id: createSavedSchemaId(),
-      name: input.name,
-      schema: input.schema,
-      projectId: input.projectId,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    return persist([...readAllSchemas(), savedSchema]) ? savedSchema : null;
-  }
-
-  function update(id: string, input: SavedSchemaInput): SavedSchema | null {
-    const currentSchemas = readAllSchemas();
-    const existingSchema = currentSchemas.find((schema) => schema.id === id);
-
-    if (!existingSchema) {
-      setError("The selected schema no longer exists.");
-      return null;
-    }
-
-    const updatedSchema: SavedSchema = {
-      ...existingSchema,
-      name: input.name,
-      schema: input.schema,
-      projectId: input.projectId,
-      updatedAt: new Date().toISOString(),
-    };
-    const nextSchemas = currentSchemas.map((schema) =>
-      schema.id === id ? updatedSchema : schema,
-    );
-
-    return persist(nextSchemas) ? updatedSchema : null;
-  }
-
-  function remove(id: string): boolean {
-    const currentSchemas = readAllSchemas();
-    const nextSchemas = currentSchemas.filter((schema) => schema.id !== id);
-
-    if (nextSchemas.length === currentSchemas.length) {
-      setError("The selected schema no longer exists.");
-      return false;
-    }
-
-    return persist(nextSchemas);
   }
 
   const schemas =

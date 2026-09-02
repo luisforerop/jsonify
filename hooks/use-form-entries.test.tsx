@@ -1,38 +1,43 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { installCollectionFetchStub } from "./collection-fetch-stub";
 import { useFormEntries } from "./use-form-entries";
 
 const values = { name: "Ada" };
 
 afterEach(() => {
-  window.localStorage.clear();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("useFormEntries", () => {
-  it("creates, reads, updates, and deletes a locally saved form entry", async () => {
-    const { result, unmount } = renderHook(() => useFormEntries());
+  it("creates, updates, and deletes a saved form entry through the API", async () => {
+    const { store, calls } = installCollectionFetchStub("/api/form-entries");
+    const { result } = renderHook(() => useFormEntries());
     await waitFor(() => expect(result.current.isLoaded).toBe(true));
 
     let id = "";
-    act(() => {
+    await act(async () => {
       id =
-        result.current.create({
-          name: "Ada's profile",
-          schemaId: "schema-1",
-          schemaName: "Customer",
-          values,
-        })?.id ?? "";
+        (
+          await result.current.create({
+            name: "Ada's profile",
+            schemaId: "schema-1",
+            schemaName: "Customer",
+            values,
+          })
+        )?.id ?? "";
     });
     expect(result.current.entries).toHaveLength(1);
-    expect(
-      JSON.parse(
-        window.localStorage.getItem("jsonify.form-entries.v1") ?? "[]",
-      ),
-    ).toHaveLength(1);
+    expect(store).toHaveLength(1);
+    expect(calls.at(-1)).toMatchObject({
+      method: "POST",
+      url: "/api/form-entries",
+    });
 
-    act(() => {
-      result.current.update(id, {
+    await act(async () => {
+      await result.current.update(id, {
         name: "Ada's updated profile",
         schemaId: "schema-1",
         schemaName: "Customer",
@@ -42,17 +47,22 @@ describe("useFormEntries", () => {
     expect(result.current.entries[0]?.name).toBe("Ada's updated profile");
     expect(result.current.entries[0]?.values).toEqual({ name: "Grace" });
 
-    unmount();
-    const loaded = renderHook(() => useFormEntries());
-    await waitFor(() =>
-      expect(loaded.result.current.entries[0]?.values).toEqual({
-        name: "Grace",
-      }),
-    );
-
-    act(() => {
-      loaded.result.current.remove(id);
+    await act(async () => {
+      await result.current.remove(id);
     });
-    expect(loaded.result.current.entries).toHaveLength(0);
+    expect(result.current.entries).toHaveLength(0);
+  });
+
+  it("surfaces an error when the API is unreachable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("network down"))),
+    );
+    const { result } = renderHook(() => useFormEntries());
+
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+    expect(result.current.error).toBe(
+      "Saved form entries are unavailable right now.",
+    );
   });
 });

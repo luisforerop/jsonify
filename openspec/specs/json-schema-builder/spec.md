@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide a form-based workspace for creating valid, nested JSON Schemas and retaining saved schemas in the user's browser.
+Provide a form-based workspace for creating valid, nested JSON Schemas and retaining saved schemas in a project-local JSON file through the server.
 
 ## Requirements
 
@@ -50,7 +50,7 @@ The system SHALL allow object properties to contain their own typed properties a
 
 ### Requirement: Manage schemas through a persistence boundary
 
-The system SHALL expose create, read, update, and delete operations for saved JSON Schemas, scoped to the active project, through external client-side hooks. The schema-builder interface SHALL use those hooks rather than accessing browser localStorage directly. The initial hook implementation SHALL persist schemas in browser localStorage, and a saved schema SHALL remain available after the browser page is reloaded in the same browser profile.
+The system SHALL expose create, read, update, and delete operations for saved JSON Schemas, scoped to the active project, through external client-side hooks. The schema-builder interface SHALL use those hooks rather than accessing browser localStorage directly. The hook implementation SHALL persist schemas in a project-local JSON file through the server, and its create, read, update, and delete operations SHALL be asynchronous. A saved schema SHALL remain available after the browser page is reloaded, including from a different browser or machine using the same server, still associated with its project.
 
 #### Scenario: Save a valid schema
 
