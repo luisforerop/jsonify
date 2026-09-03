@@ -20,6 +20,42 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Public API (`/api/v1`)
+
+Once a collection has at least one saved schema, its records are reachable over a
+versioned HTTP API. The workspace is identified by the `x-workspace-id` header;
+the validating schema is identified by the `x-schema` header (schema name or id),
+**required** on `POST`/`PUT` and optional on `GET .../schema`.
+
+| Method | Route | Purpose | Response |
+| ------ | ----- | ------- | -------- |
+| `GET` | `/api/v1/collections/:slug/records?page=1&limit=20` | List records | `{ items: Record[], pagination: { total, page, limit } }` |
+| `POST` | `/api/v1/collections/:slug/records` | Create a record (body = JSON values) | `201 { data: Record, id }` |
+| `GET` | `/api/v1/collections/:slug/records/:id` | Get one record | `{ data: Record }` |
+| `PUT` | `/api/v1/collections/:slug/records/:id` | Replace a record (full JSON body) | `{ data: Record }` |
+| `DELETE` | `/api/v1/collections/:slug/records/:id` | Delete a record | `{ success: true }` |
+| `GET` | `/api/v1/collections/:slug/schema` | Read the collection's JSON Schema | `{ schema }` |
+
+A `Record` is `{ id, schemaVersion, content, createdAt, updatedAt }`, where
+`content` holds the submitted values and `schemaVersion` is the validating
+schema's name.
+
+Errors: missing `x-workspace-id` → `400`; unknown workspace or collection →
+`404`; missing `x-schema` on a write → `400`; collection has no schema → `409`;
+payload fails schema validation → `400 { error, details }`. All `/api/v1`
+responses carry permissive CORS headers and answer `OPTIONS` preflight requests.
+
+```bash
+curl -s http://localhost:3000/api/v1/collections/recetas/records \
+  -H "x-workspace-id: <workspace-id>"
+
+curl -s -X POST http://localhost:3000/api/v1/collections/recetas/records \
+  -H "x-workspace-id: <workspace-id>" \
+  -H "x-schema: Receta" \
+  -H "Content-Type: application/json" \
+  -d '{"nombre":"Arepa","porciones":4}'
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
