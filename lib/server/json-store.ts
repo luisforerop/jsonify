@@ -15,6 +15,7 @@ export type Store = {
   collections: StoredRecord[];
   schemas: StoredRecord[];
   records: StoredRecord[];
+  apiKeys: StoredRecord[];
 };
 
 export type CollectionName = keyof Store;
@@ -26,6 +27,7 @@ export function emptyStore(): Store {
     collections: [],
     schemas: [],
     records: [],
+    apiKeys: [],
   };
 }
 
@@ -65,6 +67,7 @@ function coerceStore(value: unknown): Store {
     collections: coerceCollection(candidate.collections),
     schemas: coerceCollection(candidate.schemas),
     records: coerceCollection(candidate.records),
+    apiKeys: coerceCollection(candidate.apiKeys),
   };
 }
 

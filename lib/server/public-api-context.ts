@@ -1,5 +1,6 @@
+import { hasScope, hashApiKey, type ApiKeyAction } from "@/lib/server/api-keys";
 import { corsJson } from "@/lib/server/cors";
-import { readStore, type StoredRecord } from "@/lib/server/json-store";
+import { readStore, updateRecord, type StoredRecord } from "@/lib/server/json-store";
 import type { StoredSchema } from "@/lib/server/validate-payload";
 
 export type SchemaMode = "none" | "optional" | "required";
@@ -35,7 +36,7 @@ function fail(body: unknown, status: number): { ok: false; response: Response } 
 export async function resolvePublicContext(
   request: Request,
   collectionSlug: string,
-  options: { schema: SchemaMode },
+  options: { schema: SchemaMode; action: ApiKeyAction },
 ): Promise<PublicContextResult> {
   const workspaceId = request.headers.get("x-workspace-id");
   if (!workspaceId) {
@@ -54,6 +55,32 @@ export async function resolvePublicContext(
   );
   if (!collection) {
     return fail({ error: "Collection not found in this workspace" }, 404);
+  }
+
+  const isPublicRead = options.action === "read" && collection.isPublic === true;
+  if (!isPublicRead) {
+    const authHeader = request.headers.get("authorization");
+    const presentedKey = authHeader?.match(/^Bearer (.+)$/)?.[1];
+    if (!presentedKey) {
+      return fail({ error: "Missing API key" }, 401);
+    }
+
+    const keyHash = hashApiKey(presentedKey);
+    const apiKey = store.apiKeys.find(
+      (row) => row.keyHash === keyHash && row.workspaceId === workspace.id,
+    );
+    if (!apiKey) {
+      return fail({ error: "Invalid API key" }, 401);
+    }
+
+    const scopes = Array.isArray(apiKey.scopes) ? (apiKey.scopes as string[]) : [];
+    if (!hasScope(scopes, options.action, collectionSlug)) {
+      return fail({ error: "API key missing required scope" }, 403);
+    }
+
+    void updateRecord("apiKeys", apiKey.id, {
+      lastUsedAt: new Date().toISOString(),
+    });
   }
 
   if (options.schema === "none") {

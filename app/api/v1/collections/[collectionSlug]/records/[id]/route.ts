@@ -41,6 +41,7 @@ export async function GET(
   const { collectionSlug, id } = await context.params;
   const resolved = await resolvePublicContext(request, collectionSlug, {
     schema: "none",
+    action: "read",
   });
   if (!resolved.ok) return resolved.response;
 
@@ -57,6 +58,7 @@ export async function PUT(
   const { collectionSlug, id } = await context.params;
   const resolved = await resolvePublicContext(request, collectionSlug, {
     schema: "required",
+    action: "write",
   });
   if (!resolved.ok) return resolved.response;
 
@@ -94,6 +96,7 @@ export async function DELETE(
   const { collectionSlug, id } = await context.params;
   const resolved = await resolvePublicContext(request, collectionSlug, {
     schema: "none",
+    action: "delete",
   });
   if (!resolved.ok) return resolved.response;
 

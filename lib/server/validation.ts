@@ -1,5 +1,6 @@
 import type { JsonSchema } from "@/lib/schema-builder";
 import type { FormValues } from "@/lib/schema-form";
+import { isValidScope } from "@/lib/server/api-keys";
 
 export type UserInput = {
   name: string;
@@ -16,6 +17,7 @@ export type CollectionInput = {
   name: string;
   workspaceId: string;
   description?: string;
+  isPublic?: boolean;
 };
 
 export type SavedSchemaInput = {
@@ -31,6 +33,12 @@ export type RecordInput = {
   schemaId: string;
   schemaName: string;
   values: FormValues;
+};
+
+export type ApiKeyInput = {
+  name: string;
+  workspaceId: string;
+  scopes: string[];
 };
 
 function isNonEmptyString(value: unknown): value is string {
@@ -63,7 +71,8 @@ export function isCollectionInput(value: unknown): value is CollectionInput {
     isRecord(value) &&
     isNonEmptyString(value.name) &&
     isNonEmptyString(value.workspaceId) &&
-    (value.description === undefined || typeof value.description === "string")
+    (value.description === undefined || typeof value.description === "string") &&
+    (value.isPublic === undefined || typeof value.isPublic === "boolean")
   );
 }
 
@@ -85,5 +94,16 @@ export function isRecordInput(value: unknown): value is RecordInput {
     isNonEmptyString(value.schemaId) &&
     isNonEmptyString(value.schemaName) &&
     isRecord(value.values)
+  );
+}
+
+export function isApiKeyInput(value: unknown): value is ApiKeyInput {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.name) &&
+    isNonEmptyString(value.workspaceId) &&
+    Array.isArray(value.scopes) &&
+    value.scopes.length > 0 &&
+    value.scopes.every((scope) => isValidScope(scope))
   );
 }

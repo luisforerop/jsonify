@@ -171,6 +171,21 @@ button {
   padding: 0 8px;
   font-size: 13px;
 }
+.collection-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin: 14px 0;
+}
+.collection-rename-form {
+  display: flex;
+}
+.collection-rename-form input {
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 13px;
+}
 .saved-panel,
 .preview-panel {
   padding: 18px;
@@ -382,6 +397,71 @@ select:focus {
   width: 15px;
   height: 15px;
   accent-color: var(--teal);
+}
+.scope-picker {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+}
+.scope-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 12px;
+  border: 1px solid #d2ddd4;
+  border-radius: 5px;
+  background: #fcfdf9;
+}
+.scope-row-all {
+  border-left: 3px solid var(--teal);
+}
+.scope-row-label {
+  font-size: 13px;
+  font-weight: 650;
+  color: #31514a;
+}
+.api-key-permissions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.api-key-permission {
+  border-radius: 99px;
+  background: #e5eee4;
+  padding: 3px 8px;
+  color: #355b52;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.api-example {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #d2ddd4;
+}
+.api-example-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 8px;
+}
+.api-example-tabs .text-button.is-active {
+  color: #1f3a35;
+  text-decoration: underline;
+}
+.api-example-snippet {
+  max-height: 220px;
+  overflow: auto;
+  margin: 10px 0;
+  border-radius: 5px;
+  background: #152c2a;
+  padding: 14px;
+  color: #d9f2dc;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
 }
 .nested-properties,
 .array-definition {

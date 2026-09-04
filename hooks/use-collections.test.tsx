@@ -52,6 +52,32 @@ describe("useCollections", () => {
     expect(store).toHaveLength(0);
   });
 
+  it("round-trips isPublic through create and update", async () => {
+    installCollectionFetchStub("/api/collections");
+    const { result } = renderHook(() => useCollections(workspaceId));
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+
+    let id = "";
+    await act(async () => {
+      id =
+        (await result.current.create({
+          name: "Recetas",
+          workspaceId,
+          isPublic: true,
+        }))?.id ?? "";
+    });
+    expect(result.current.collections[0]?.isPublic).toBe(true);
+
+    await act(async () => {
+      await result.current.update(id, {
+        name: "Recetas",
+        workspaceId,
+        isPublic: false,
+      });
+    });
+    expect(result.current.collections[0]?.isPublic).toBe(false);
+  });
+
   it("scopes the returned collections to the given workspace", async () => {
     const { store } = installCollectionFetchStub("/api/collections");
     store.push(

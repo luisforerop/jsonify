@@ -10,6 +10,7 @@ export type Collection = {
   slug: string;
   description: string;
   workspaceId: string;
+  isPublic?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -18,12 +19,14 @@ export type CollectionInput = {
   name: string;
   workspaceId: string;
   description?: string;
+  isPublic?: boolean;
 };
 
 export type CollectionUpdate = {
   name: string;
   workspaceId: string;
   description?: string;
+  isPublic?: boolean;
 };
 
 export type CollectionsHook = {

@@ -1,13 +1,13 @@
 /**
- * Permissive CORS headers for the public `/api/v1` routes. The prototype has no
- * auth or credentials, and the data is served by a public API by design, so a
- * wildcard origin is acceptable.
+ * Permissive CORS headers for the public `/api/v1` routes. Access control is
+ * enforced by API key scopes (see `public-api-context.ts`), not by origin, so
+ * a wildcard origin remains acceptable.
  */
 export const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers":
-    "Content-Type, x-workspace-id, x-schema, x-record-name",
+    "Content-Type, Authorization, x-workspace-id, x-schema, x-record-name",
 };
 
 /** Answer a CORS preflight `OPTIONS` request. */

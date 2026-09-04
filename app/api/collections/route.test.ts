@@ -89,6 +89,40 @@ describe("collections route handlers", () => {
     expect(await response.json()).toMatchObject({ id: record.id, name: "New" });
   });
 
+  it("POST without isPublic defaults it to falsy", async () => {
+    const created = await (
+      await POST(postRequest({ name: "Recetas", workspaceId: "w1" }))
+    ).json();
+    expect(created.isPublic).toBeFalsy();
+  });
+
+  it("POST with isPublic: true persists it", async () => {
+    const created = await (
+      await POST(
+        postRequest({ name: "Recetas", workspaceId: "w1", isPublic: true }),
+      )
+    ).json();
+    expect(created.isPublic).toBe(true);
+  });
+
+  it("PATCH updates only isPublic, leaving other fields unchanged", async () => {
+    const record = await (
+      await POST(postRequest({ name: "Recetas", workspaceId: "w1" }))
+    ).json();
+    const response = await PATCH(
+      postRequest({ name: "Recetas", workspaceId: "w1", isPublic: true }),
+      itemContext(record.id),
+    );
+    expect(response.status).toBe(200);
+    const updated = await response.json();
+    expect(updated).toMatchObject({
+      id: record.id,
+      name: "Recetas",
+      slug: record.slug,
+      isPublic: true,
+    });
+  });
+
   it("DELETE removes a collection and reports the outcome", async () => {
     const record = await (
       await POST(postRequest({ name: "Temp", workspaceId: "w1" }))

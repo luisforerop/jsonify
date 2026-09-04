@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { generateApiKey } from "@/lib/server/api-keys";
 import { createRecord, type StoredRecord } from "@/lib/server/json-store";
 
 import { GET, POST } from "./route";
@@ -12,6 +13,7 @@ let dataDir = "";
 let workspace: StoredRecord;
 let collection: StoredRecord;
 let schema: StoredRecord;
+let apiKey: string;
 
 const schemaDoc = {
   type: "object",
@@ -34,12 +36,23 @@ beforeEach(async () => {
     name: "Recetas",
     slug: "recetas",
     workspaceId: workspace.id,
+    isPublic: true,
   });
   schema = await createRecord("schemas", {
     name: "Receta",
     collectionId: collection.id,
     workspaceId: workspace.id,
     schema: schemaDoc,
+  });
+  const generated = generateApiKey();
+  apiKey = generated.key;
+  await createRecord("apiKeys", {
+    name: "Test key",
+    workspaceId: workspace.id,
+    keyHash: generated.keyHash,
+    keyPrefix: generated.keyPrefix,
+    scopes: ["*"],
+    lastUsedAt: null,
   });
 });
 
@@ -59,6 +72,7 @@ function req(init: RequestInit & { query?: string } = {}): Request {
       headers: {
         "x-workspace-id": workspace.id,
         "x-schema": "Receta",
+        authorization: `Bearer ${apiKey}`,
         ...(rest.headers ?? {}),
       },
     },
@@ -132,5 +146,46 @@ describe("v1 records collection route", () => {
   it("GET returns an empty page for a collection with no records", async () => {
     const body = await (await GET(req(), ctx)).json();
     expect(body).toEqual({ items: [], pagination: { total: 0, page: 1, limit: 20 } });
+  });
+
+  it("GET succeeds on a public collection with no key", async () => {
+    const response = await GET(
+      req({ headers: { authorization: "" } }),
+      ctx,
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it("POST without a key is 401, even on a public collection", async () => {
+    const response = await POST(
+      req({
+        method: "POST",
+        body: JSON.stringify({ nombre: "Arepa" }),
+        headers: { authorization: "" },
+      }),
+      ctx,
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it("POST with a key that lacks a write scope is 403", async () => {
+    const generated = generateApiKey();
+    await createRecord("apiKeys", {
+      name: "Read only",
+      workspaceId: workspace.id,
+      keyHash: generated.keyHash,
+      keyPrefix: generated.keyPrefix,
+      scopes: ["read:recetas"],
+      lastUsedAt: null,
+    });
+    const response = await POST(
+      req({
+        method: "POST",
+        body: JSON.stringify({ nombre: "Arepa" }),
+        headers: { authorization: `Bearer ${generated.key}` },
+      }),
+      ctx,
+    );
+    expect(response.status).toBe(403);
   });
 });

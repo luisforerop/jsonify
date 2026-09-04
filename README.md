@@ -40,20 +40,42 @@ A `Record` is `{ id, schemaVersion, content, createdAt, updatedAt }`, where
 `content` holds the submitted values and `schemaVersion` is the validating
 schema's name.
 
+### Authorization
+
+Every `/api/v1` request is authorized after the workspace and collection are
+resolved. A `GET` (records, a record by id, or the schema) against a collection
+whose `isPublic` flag is `true` needs no key. Every other request — reads on a
+non-public collection, and every `POST`/`PUT`/`DELETE` regardless of
+`isPublic` — requires an `Authorization: Bearer <key>` header carrying an API
+key that belongs to the resolved workspace and whose scopes cover the request.
+
+Mint keys from a workspace's API keys panel in the app. A key carries an array
+of scopes, each one of `*` (everything), `<action>:*` (that action on every
+collection), or `<action>:<collectionSlug>` (that action on one collection),
+where `action` is `read` (`GET`), `write` (`POST`/`PUT`), or `delete`
+(`DELETE`). The raw key is shown once, at creation time, and only its hash is
+stored — treat it like a password.
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/collections/recetas/records \
+  -H "x-workspace-id: <workspace-id>" \
+  -H "x-schema: Receta" \
+  -H "Authorization: Bearer <api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"nombre":"Arepa","porciones":4}'
+```
+
 Errors: missing `x-workspace-id` → `400`; unknown workspace or collection →
-`404`; missing `x-schema` on a write → `400`; collection has no schema → `409`;
-payload fails schema validation → `400 { error, details }`. All `/api/v1`
-responses carry permissive CORS headers and answer `OPTIONS` preflight requests.
+`404`; missing or unrecognized API key when one is required → `401`; a
+recognized key lacking the required scope → `403`; missing `x-schema` on a
+write → `400`; collection has no schema → `409`; payload fails schema
+validation → `400 { error, details }`. All `/api/v1` responses carry
+permissive CORS headers (including `Authorization` as an allowed request
+header) and answer `OPTIONS` preflight requests.
 
 ```bash
 curl -s http://localhost:3000/api/v1/collections/recetas/records \
   -H "x-workspace-id: <workspace-id>"
-
-curl -s -X POST http://localhost:3000/api/v1/collections/recetas/records \
-  -H "x-workspace-id: <workspace-id>" \
-  -H "x-schema: Receta" \
-  -H "Content-Type: application/json" \
-  -d '{"nombre":"Arepa","porciones":4}'
 ```
 
 ## Learn More

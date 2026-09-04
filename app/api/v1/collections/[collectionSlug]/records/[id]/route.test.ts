@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { generateApiKey } from "@/lib/server/api-keys";
 import { createRecord, type StoredRecord } from "@/lib/server/json-store";
 
 import { DELETE, GET, PUT } from "./route";
@@ -13,6 +14,7 @@ let workspace: StoredRecord;
 let collection: StoredRecord;
 let schema: StoredRecord;
 let record: StoredRecord;
+let apiKey: string;
 
 const schemaDoc = {
   type: "object",
@@ -32,6 +34,7 @@ beforeEach(async () => {
     name: "Recetas",
     slug: "recetas",
     workspaceId: workspace.id,
+    isPublic: true,
   });
   schema = await createRecord("schemas", {
     name: "Receta",
@@ -45,6 +48,16 @@ beforeEach(async () => {
     schemaId: schema.id,
     schemaName: "Receta",
     values: { nombre: "Arepa", porciones: 2 },
+  });
+  const generated = generateApiKey();
+  apiKey = generated.key;
+  await createRecord("apiKeys", {
+    name: "Test key",
+    workspaceId: workspace.id,
+    keyHash: generated.keyHash,
+    keyPrefix: generated.keyPrefix,
+    scopes: ["*"],
+    lastUsedAt: null,
   });
 });
 
@@ -63,6 +76,7 @@ function req(init: RequestInit = {}): Request {
     headers: {
       "x-workspace-id": workspace.id,
       "x-schema": "Receta",
+      authorization: `Bearer ${apiKey}`,
       ...(init.headers ?? {}),
     },
   });
@@ -94,7 +108,10 @@ describe("v1 single-record route", () => {
     const request = new Request("http://localhost/x", {
       method: "PUT",
       body: JSON.stringify({ nombre: "Bollo" }),
-      headers: { "x-workspace-id": workspace.id },
+      headers: {
+        "x-workspace-id": workspace.id,
+        authorization: `Bearer ${apiKey}`,
+      },
     });
     const response = await PUT(request, ctx(record.id));
     expect(response.status).toBe(400);
@@ -135,5 +152,48 @@ describe("v1 single-record route", () => {
 
     const response = await GET(req(), ctx(otherRecord.id));
     expect(response.status).toBe(404);
+  });
+
+  it("GET without a key is 401 for a private collection", async () => {
+    const privateCollection = await createRecord("collections", {
+      name: "Privado",
+      slug: "privado",
+      workspaceId: workspace.id,
+      isPublic: false,
+    });
+    const privateRecord = await createRecord("records", {
+      name: "Secreto",
+      collectionId: privateCollection.id,
+      schemaId: schema.id,
+      schemaName: "Receta",
+      values: { nombre: "Secreto" },
+    });
+    const request = new Request("http://localhost/api/v1/collections/privado/records/x", {
+      headers: { "x-workspace-id": workspace.id },
+    });
+    const response = await GET(request, {
+      params: Promise.resolve({ collectionSlug: "privado", id: privateRecord.id }),
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it("DELETE with a key that lacks the delete scope is 403", async () => {
+    const generated = generateApiKey();
+    await createRecord("apiKeys", {
+      name: "Read only",
+      workspaceId: workspace.id,
+      keyHash: generated.keyHash,
+      keyPrefix: generated.keyPrefix,
+      scopes: ["read:recetas"],
+      lastUsedAt: null,
+    });
+    const response = await DELETE(
+      req({
+        method: "DELETE",
+        headers: { authorization: `Bearer ${generated.key}` },
+      }),
+      ctx(record.id),
+    );
+    expect(response.status).toBe(403);
   });
 });

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CollectionManager } from "@/app/components/collections/collection-manager";
 import { ScopedGate } from "@/app/components/collections/scoped-gate";
 import { Breadcrumb } from "@/app/components/shared/breadcrumb";
+import { ApiKeysManager } from "@/app/components/workspaces/api-keys-manager";
 import { useScopedCollection } from "@/hooks/use-scoped-collection";
 
 type WorkspaceCollectionsProps = {
@@ -37,6 +38,7 @@ export function WorkspaceCollections({
             </div>
           </header>
           <CollectionManager workspace={workspace} />
+          <ApiKeysManager workspaceId={workspace.id} />
         </main>
       )}
     </ScopedGate>

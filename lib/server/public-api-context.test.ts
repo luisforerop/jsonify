@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { hashApiKey } from "@/lib/server/api-keys";
 import { createRecord, type StoredRecord } from "@/lib/server/json-store";
 import { resolvePublicContext } from "@/lib/server/public-api-context";
 
@@ -23,6 +24,7 @@ beforeEach(async () => {
     name: "Recetas",
     slug: "recetas",
     workspaceId: workspace.id,
+    isPublic: true,
   });
 });
 
@@ -50,6 +52,7 @@ describe("resolvePublicContext", () => {
   it("400s when the workspace header is missing", async () => {
     const result = await resolvePublicContext(request({}), "recetas", {
       schema: "none",
+      action: "read",
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.response.status).toBe(400);
@@ -59,7 +62,7 @@ describe("resolvePublicContext", () => {
     const result = await resolvePublicContext(
       request({ "x-workspace-id": "nope" }),
       "recetas",
-      { schema: "none" },
+      { schema: "none", action: "read" },
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.response.status).toBe(404);
@@ -69,7 +72,7 @@ describe("resolvePublicContext", () => {
     const result = await resolvePublicContext(
       request({ "x-workspace-id": workspace.id }),
       "postres",
-      { schema: "none" },
+      { schema: "none", action: "read" },
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.response.status).toBe(404);
@@ -79,7 +82,7 @@ describe("resolvePublicContext", () => {
     const result = await resolvePublicContext(
       request({ "x-workspace-id": workspace.id }),
       "recetas",
-      { schema: "none" },
+      { schema: "none", action: "read" },
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -92,7 +95,7 @@ describe("resolvePublicContext", () => {
     const result = await resolvePublicContext(
       request({ "x-workspace-id": workspace.id }),
       "recetas",
-      { schema: "required" },
+      { schema: "required", action: "read" },
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.response.status).toBe(409);
@@ -103,7 +106,7 @@ describe("resolvePublicContext", () => {
     const result = await resolvePublicContext(
       request({ "x-workspace-id": workspace.id, "x-schema": "Receta" }),
       "recetas",
-      { schema: "required" },
+      { schema: "required", action: "read" },
     );
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.schema?.name).toBe("Receta");
@@ -114,7 +117,7 @@ describe("resolvePublicContext", () => {
     const result = await resolvePublicContext(
       request({ "x-workspace-id": workspace.id, "x-schema": created.id }),
       "recetas",
-      { schema: "required" },
+      { schema: "required", action: "read" },
     );
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.schema?.id).toBe(created.id);
@@ -125,7 +128,7 @@ describe("resolvePublicContext", () => {
     const result = await resolvePublicContext(
       request({ "x-workspace-id": workspace.id, "x-schema": "Otro" }),
       "recetas",
-      { schema: "required" },
+      { schema: "required", action: "read" },
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.response.status).toBe(404);
@@ -136,7 +139,7 @@ describe("resolvePublicContext", () => {
     const result = await resolvePublicContext(
       request({ "x-workspace-id": workspace.id }),
       "recetas",
-      { schema: "required" },
+      { schema: "required", action: "read" },
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.response.status).toBe(400);
@@ -147,7 +150,7 @@ describe("resolvePublicContext", () => {
     const result = await resolvePublicContext(
       request({ "x-workspace-id": workspace.id }),
       "recetas",
-      { schema: "optional" },
+      { schema: "optional", action: "read" },
     );
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.schema?.name).toBe("Receta");
@@ -159,9 +162,118 @@ describe("resolvePublicContext", () => {
     const result = await resolvePublicContext(
       request({ "x-workspace-id": workspace.id }),
       "recetas",
-      { schema: "optional" },
+      { schema: "optional", action: "read" },
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.response.status).toBe(400);
+  });
+});
+
+describe("resolvePublicContext authorization", () => {
+  beforeEach(async () => {
+    await createRecord("collections", {
+      name: "Privado",
+      slug: "privado",
+      workspaceId: workspace.id,
+      isPublic: false,
+    });
+  });
+
+  async function addApiKey(scopes: string[], forWorkspace = workspace) {
+    const raw = `jfy_${Math.random().toString(16).slice(2).padEnd(32, "0")}`;
+    await createRecord("apiKeys", {
+      name: "Test key",
+      workspaceId: forWorkspace.id,
+      keyHash: hashApiKey(raw),
+      keyPrefix: raw.slice(0, 12),
+      scopes,
+      lastUsedAt: null,
+    });
+    return raw;
+  }
+
+  it("allows a public-collection read with no key", async () => {
+    const result = await resolvePublicContext(
+      request({ "x-workspace-id": workspace.id }),
+      "recetas",
+      { schema: "none", action: "read" },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("401s a private-collection read with no key", async () => {
+    const result = await resolvePublicContext(
+      request({ "x-workspace-id": workspace.id }),
+      "privado",
+      { schema: "none", action: "read" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(401);
+  });
+
+  it("401s any write with no key, even on a public collection", async () => {
+    const result = await resolvePublicContext(
+      request({ "x-workspace-id": workspace.id }),
+      "recetas",
+      { schema: "none", action: "write" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(401);
+  });
+
+  it("succeeds with a key carrying a matching scope", async () => {
+    const raw = await addApiKey(["write:privado"]);
+    const result = await resolvePublicContext(
+      request({
+        "x-workspace-id": workspace.id,
+        authorization: `Bearer ${raw}`,
+      }),
+      "privado",
+      { schema: "none", action: "write" },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("403s a key with an insufficient scope", async () => {
+    const raw = await addApiKey(["read:privado"]);
+    const result = await resolvePublicContext(
+      request({
+        "x-workspace-id": workspace.id,
+        authorization: `Bearer ${raw}`,
+      }),
+      "privado",
+      { schema: "none", action: "delete" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(403);
+  });
+
+  it("401s a key that belongs to a different workspace", async () => {
+    const otherWorkspace = await createRecord("workspaces", {
+      name: "Otro",
+      slug: "otro",
+      ownerId: "u2",
+    });
+    const raw = await addApiKey(["*"], otherWorkspace);
+    const result = await resolvePublicContext(
+      request({
+        "x-workspace-id": workspace.id,
+        authorization: `Bearer ${raw}`,
+      }),
+      "privado",
+      { schema: "none", action: "read" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(401);
+  });
+
+  it("returns the authorization failure before the schema's 409", async () => {
+    const result = await resolvePublicContext(
+      request({ "x-workspace-id": workspace.id }),
+      "privado",
+      { schema: "required", action: "write" },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(401);
   });
 });

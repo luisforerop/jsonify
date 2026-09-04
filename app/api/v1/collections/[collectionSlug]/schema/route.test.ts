@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { generateApiKey } from "@/lib/server/api-keys";
 import { createRecord, type StoredRecord } from "@/lib/server/json-store";
 
 import {
@@ -16,6 +17,7 @@ import { GET, OPTIONS } from "./route";
 let dataDir = "";
 let workspace: StoredRecord;
 let collection: StoredRecord;
+let apiKey: string;
 
 const schemaDoc = {
   type: "object",
@@ -35,6 +37,17 @@ beforeEach(async () => {
     name: "Recetas",
     slug: "recetas",
     workspaceId: workspace.id,
+    isPublic: true,
+  });
+  const generated = generateApiKey();
+  apiKey = generated.key;
+  await createRecord("apiKeys", {
+    name: "Test key",
+    workspaceId: workspace.id,
+    keyHash: generated.keyHash,
+    keyPrefix: generated.keyPrefix,
+    scopes: ["*"],
+    lastUsedAt: null,
   });
 });
 
@@ -105,7 +118,10 @@ describe("v1 public API request resolution", () => {
       new Request("http://localhost/x", {
         method: "POST",
         body: JSON.stringify({ nombre: "Arepa" }),
-        headers: { "x-workspace-id": workspace.id },
+        headers: {
+          "x-workspace-id": workspace.id,
+          authorization: `Bearer ${apiKey}`,
+        },
       }),
       ctx,
     );
@@ -117,11 +133,27 @@ describe("v1 public API request resolution", () => {
       new Request("http://localhost/x", {
         method: "POST",
         body: JSON.stringify({ nombre: "Arepa" }),
-        headers: { "x-workspace-id": workspace.id, "x-schema": "Receta" },
+        headers: {
+          "x-workspace-id": workspace.id,
+          "x-schema": "Receta",
+          authorization: `Bearer ${apiKey}`,
+        },
       }),
       ctx,
     );
     expect(response.status).toBe(409);
+  });
+
+  it("401s on POST without a key, even on a public collection", async () => {
+    const response = await recordsPOST(
+      new Request("http://localhost/x", {
+        method: "POST",
+        body: JSON.stringify({ nombre: "Arepa" }),
+        headers: { "x-workspace-id": workspace.id, "x-schema": "Receta" },
+      }),
+      ctx,
+    );
+    expect(response.status).toBe(401);
   });
 
   it("answers an OPTIONS preflight with CORS headers", async () => {
@@ -129,6 +161,9 @@ describe("v1 public API request resolution", () => {
     expect(response.status).toBe(204);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(response.headers.get("Access-Control-Allow-Methods")).toContain("PUT");
+    expect(response.headers.get("Access-Control-Allow-Headers")).toContain(
+      "Authorization",
+    );
   });
 
   it("includes CORS headers on a normal response", async () => {

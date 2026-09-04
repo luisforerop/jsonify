@@ -16,6 +16,7 @@ export async function GET(
   const { collectionSlug } = await context.params;
   const resolved = await resolvePublicContext(request, collectionSlug, {
     schema: "optional",
+    action: "read",
   });
   if (!resolved.ok) return resolved.response;
 

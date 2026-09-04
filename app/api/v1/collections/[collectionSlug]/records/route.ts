@@ -35,6 +35,7 @@ export async function GET(
   const { collectionSlug } = await context.params;
   const resolved = await resolvePublicContext(request, collectionSlug, {
     schema: "none",
+    action: "read",
   });
   if (!resolved.ok) return resolved.response;
 
@@ -60,6 +61,7 @@ export async function POST(
   const { collectionSlug } = await context.params;
   const resolved = await resolvePublicContext(request, collectionSlug, {
     schema: "required",
+    action: "write",
   });
   if (!resolved.ok) return resolved.response;
 
