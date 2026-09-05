@@ -15,7 +15,6 @@ export type Workspace = {
 
 export type WorkspaceInput = {
   name: string;
-  ownerId: string;
 };
 
 export type WorkspacesHook = {
@@ -29,8 +28,12 @@ export type WorkspacesHook = {
 const LOAD_ERROR = "Saved workspaces are unavailable right now.";
 const SAVE_ERROR = "Could not save your workspace.";
 
-export function useWorkspaces(ownerId?: string): WorkspacesHook {
-  const [allWorkspaces, setAllWorkspaces] = useState<Workspace[]>([]);
+/**
+ * Lists and creates the signed-in user's workspaces. The server scopes
+ * `GET`/`POST` to the authenticated session, so no owner id is passed here.
+ */
+export function useWorkspaces(): WorkspacesHook {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -38,7 +41,7 @@ export function useWorkspaces(ownerId?: string): WorkspacesHook {
     try {
       const response = await fetch(API_BASE);
       if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-      setAllWorkspaces((await response.json()) as Workspace[]);
+      setWorkspaces((await response.json()) as Workspace[]);
       setError(null);
     } catch {
       setError(LOAD_ERROR);
@@ -67,7 +70,7 @@ export function useWorkspaces(ownerId?: string): WorkspacesHook {
       }
       if (!response.ok) throw new Error(`Request failed: ${response.status}`);
       const workspace = (await response.json()) as Workspace;
-      setAllWorkspaces((current) => [...current, workspace]);
+      setWorkspaces((current) => [...current, workspace]);
       setError(null);
       return workspace;
     } catch {
@@ -75,11 +78,6 @@ export function useWorkspaces(ownerId?: string): WorkspacesHook {
       return null;
     }
   }
-
-  const workspaces =
-    ownerId === undefined
-      ? allWorkspaces
-      : allWorkspaces.filter((workspace) => workspace.ownerId === ownerId);
 
   return { workspaces, error, isLoaded, create, read };
 }

@@ -20,6 +20,18 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Authentication
+
+Sign-in, sign-up, and session management are handled by [Clerk](https://clerk.com).
+Copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+and `CLERK_SECRET_KEY` from your Clerk dashboard (or run `clerk init` to generate
+a development instance for you).
+
+`/workspaces` and `/w/*` pages, and every workspace/collection/schema/record/API
+key management route under `/api/*` (excluding the public `/api/v1/*` API below),
+require a signed-in session. `GET /api/workspaces` only returns the signed-in
+user's own workspaces.
+
 ## Public API (`/api/v1`)
 
 Once a collection has at least one saved schema, its records are reachable over a

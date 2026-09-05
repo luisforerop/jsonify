@@ -1,9 +1,9 @@
 "use client";
 
+import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { SwitchUserButton } from "@/app/components/users/switch-user-button";
 import { WorkspaceSelector } from "@/app/components/workspaces/workspace-selector";
 import { useSession } from "@/app/session-context";
 import { useRequireUser } from "@/hooks/use-require-user";
@@ -13,12 +13,7 @@ export function WorkspacesView() {
   const currentUser = useRequireUser();
   const router = useRouter();
   const { currentWorkspace, selectWorkspace } = useSession();
-  const {
-    workspaces,
-    error,
-    isLoaded,
-    create,
-  } = useWorkspaces(currentUser?.id);
+  const { workspaces, error, isLoaded, create } = useWorkspaces();
 
   if (!currentUser) return null;
 
@@ -28,7 +23,7 @@ export function WorkspacesView() {
   }
 
   async function createWorkspace(name: string): Promise<boolean> {
-    const workspace = await create({ name, ownerId: currentUser!.id });
+    const workspace = await create({ name });
     if (workspace) {
       openWorkspace(workspace);
       return true;
@@ -52,7 +47,7 @@ export function WorkspacesView() {
           <span className="breadcrumb-current">Workspaces</span>
         </div>
         <div className="topbar-actions">
-          <SwitchUserButton />
+          <UserButton />
         </div>
       </header>
 

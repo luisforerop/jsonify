@@ -1,5 +1,6 @@
 import { generateApiKey } from "@/lib/server/api-keys";
 import { createRecord, listCollection, readStore } from "@/lib/server/json-store";
+import { requireUserId, unauthorizedResponse } from "@/lib/server/require-auth";
 import { isApiKeyInput } from "@/lib/server/validation";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,9 @@ function maskKey(record: Record<string, unknown>): Record<string, unknown> {
 }
 
 export async function GET(request: Request): Promise<Response> {
+  const userId = await requireUserId();
+  if (!userId) return unauthorizedResponse();
+
   const workspaceId = new URL(request.url).searchParams.get("workspaceId");
   if (!workspaceId) {
     return Response.json(
@@ -38,6 +42,9 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const userId = await requireUserId();
+  if (!userId) return unauthorizedResponse();
+
   const body = await parseBody(request);
   if (body === INVALID || !isApiKeyInput(body)) {
     return Response.json({ error: "Invalid payload" }, { status: 400 });

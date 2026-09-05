@@ -4,34 +4,32 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { installCollectionFetchStub } from "./collection-fetch-stub";
 import { useWorkspaces } from "./use-workspaces";
 
-const ownerId = "user-1";
-
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("useWorkspaces", () => {
-  it("creates a workspace and scopes results to the given owner", async () => {
+  it("lists what the server returns and appends a created workspace", async () => {
     const { store } = installCollectionFetchStub("/api/workspaces");
     store.push({
-      id: "other",
-      name: "Someone else",
-      slug: "someone-else",
-      ownerId: "user-2",
+      id: "existing",
+      name: "Existing",
+      slug: "existing",
+      ownerId: "user-1",
       createdAt: "",
       updatedAt: "",
     });
 
-    const { result } = renderHook(() => useWorkspaces(ownerId));
+    const { result } = renderHook(() => useWorkspaces());
     await waitFor(() => expect(result.current.isLoaded).toBe(true));
-    expect(result.current.workspaces).toHaveLength(0);
+    expect(result.current.workspaces).toHaveLength(1);
 
     await act(async () => {
-      await result.current.create({ name: "Clean Fuel", ownerId });
+      await result.current.create({ name: "Clean Fuel" });
     });
-    expect(result.current.workspaces).toHaveLength(1);
-    expect(result.current.workspaces[0]?.ownerId).toBe(ownerId);
+    expect(result.current.workspaces).toHaveLength(2);
+    expect(result.current.workspaces[1]?.name).toBe("Clean Fuel");
   });
 
   it("surfaces the server message when a workspace name is taken", async () => {
@@ -47,11 +45,11 @@ describe("useWorkspaces", () => {
         );
       }),
     );
-    const { result } = renderHook(() => useWorkspaces(ownerId));
+    const { result } = renderHook(() => useWorkspaces());
     await waitFor(() => expect(result.current.isLoaded).toBe(true));
 
     await act(async () => {
-      await result.current.create({ name: "Clean Fuel", ownerId });
+      await result.current.create({ name: "Clean Fuel" });
     });
     expect(result.current.error).toBe("That name is already taken here");
   });

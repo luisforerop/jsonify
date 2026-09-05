@@ -27,11 +27,12 @@ export function useScopedCollection(
   workspaceSlug: string,
   collectionSlug?: string,
 ): ScopedCollection {
-  const { currentUser, selectWorkspace, selectCollection } = useSession();
+  const { currentUser, isUserLoaded, selectWorkspace, selectCollection } =
+    useSession();
   const {
     workspaces,
     isLoaded: workspacesLoaded,
-  } = useWorkspaces(currentUser?.id);
+  } = useWorkspaces();
   const workspace =
     workspaces.find((candidate) => candidate.slug === workspaceSlug) ?? null;
   const {
@@ -53,7 +54,9 @@ export function useScopedCollection(
   }, [collection, selectCollection]);
 
   let status: ScopedCollectionStatus = "ready";
-  if (!currentUser) {
+  if (!isUserLoaded) {
+    status = "loading";
+  } else if (!currentUser) {
     status = "no-user";
   } else if (!workspacesLoaded || (workspace && !collectionsLoaded)) {
     status = "loading";

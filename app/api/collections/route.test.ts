@@ -2,7 +2,18 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@clerk/nextjs/server", () => ({
+  auth: vi.fn(),
+  currentUser: vi.fn(async () => ({
+    fullName: "Test User",
+    username: "testuser",
+    primaryEmailAddress: { emailAddress: "test@example.com" },
+  })),
+}));
+
+import { auth } from "@clerk/nextjs/server";
 
 import { DELETE, PATCH } from "./[id]/route";
 import { GET, POST } from "./route";
@@ -12,6 +23,7 @@ let dataDir = "";
 beforeEach(async () => {
   dataDir = await mkdtemp(path.join(tmpdir(), "jsonify-routes-"));
   process.env.JSONIFY_DATA_DIR = dataDir;
+  vi.mocked(auth).mockResolvedValue({ userId: "test-user" } as never);
 });
 
 afterEach(async () => {
@@ -134,5 +146,11 @@ describe("collections route handlers", () => {
 
     const missing = await DELETE(postRequest({}), itemContext(record.id));
     expect(missing.status).toBe(404);
+  });
+
+  it("rejects requests with no signed-in user", async () => {
+    vi.mocked(auth).mockResolvedValue({ userId: null } as never);
+    const response = await POST(postRequest({ name: "Recetas", workspaceId: "w1" }));
+    expect(response.status).toBe(401);
   });
 });

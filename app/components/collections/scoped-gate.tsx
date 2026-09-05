@@ -14,13 +14,15 @@ type ScopedGateProps = {
 /**
  * Renders `children` only when the URL's workspace/collection slugs resolved to
  * real records for the active user. Otherwise shows the matching fallback, and
- * sends a visitor with no active user back to `/login`.
+ * sends a signed-out visitor to `/sign-in`. `status` only reaches `"no-user"`
+ * once Clerk has finished loading (see `useScopedCollection`), so this never
+ * fires while a signed-in visitor's session is still hydrating.
  */
 export function ScopedGate({ status, children }: ScopedGateProps) {
   const router = useRouter();
 
   useEffect(() => {
-    if (status === "no-user") router.replace("/login");
+    if (status === "no-user") router.replace("/sign-in");
   }, [status, router]);
 
   if (status === "ready") return <>{children}</>;

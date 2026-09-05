@@ -2,12 +2,6 @@ import type { JsonSchema } from "@/lib/schema-builder";
 import type { FormValues } from "@/lib/schema-form";
 import { isValidScope } from "@/lib/server/api-keys";
 
-export type UserInput = {
-  name: string;
-  email: string;
-  password: string;
-};
-
 export type WorkspaceInput = {
   name: string;
   ownerId: string;
@@ -47,15 +41,6 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function isUserInput(value: unknown): value is UserInput {
-  return (
-    isRecord(value) &&
-    isNonEmptyString(value.name) &&
-    isNonEmptyString(value.email) &&
-    isNonEmptyString(value.password)
-  );
 }
 
 export function isWorkspaceInput(value: unknown): value is WorkspaceInput {

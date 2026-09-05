@@ -115,6 +115,40 @@ export async function listCollection(
   return store[collection];
 }
 
+export async function getRecord(
+  collection: CollectionName,
+  id: string,
+): Promise<StoredRecord | null> {
+  const store = await readStore();
+  return store[collection].find((record) => record.id === id) ?? null;
+}
+
+/**
+ * Insert or update a record at a caller-chosen id, instead of generating one.
+ * Used to key a record by an external system's id (e.g. a Clerk user id).
+ */
+export function upsertRecordWithId(
+  collection: CollectionName,
+  id: string,
+  input: Record<string, unknown>,
+): Promise<StoredRecord> {
+  return withLock(async () => {
+    const store = await readStore();
+    const now = new Date().toISOString();
+    const existing = store[collection].find((record) => record.id === id);
+    const record: StoredRecord = existing
+      ? { ...existing, ...input, id, updatedAt: now }
+      : { ...input, id, createdAt: now, updatedAt: now };
+    store[collection] = existing
+      ? store[collection].map((candidate) =>
+          candidate.id === id ? record : candidate,
+        )
+      : [...store[collection], record];
+    await writeStore(store);
+    return record;
+  });
+}
+
 export function createRecord(
   collection: CollectionName,
   input: Record<string, unknown>,

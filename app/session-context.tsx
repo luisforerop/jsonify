@@ -1,5 +1,6 @@
 "use client";
 
+import { useUser } from "@clerk/nextjs";
 import {
   createContext,
   useCallback,
@@ -10,14 +11,19 @@ import {
 } from "react";
 
 import type { Collection } from "@/hooks/use-collections";
-import type { User } from "@/hooks/use-users";
 import type { Workspace } from "@/hooks/use-workspaces";
 
+export type SessionUser = {
+  id: string;
+  name: string;
+  email: string;
+};
+
 type SessionValue = {
-  currentUser: User | null;
+  currentUser: SessionUser | null;
+  isUserLoaded: boolean;
   currentWorkspace: Workspace | null;
   currentCollection: Collection | null;
-  selectUser: (user: User | null) => void;
   selectWorkspace: (workspace: Workspace | null) => void;
   selectCollection: (collection: Collection | null) => void;
 };
@@ -25,12 +31,13 @@ type SessionValue = {
 const SessionContext = createContext<SessionValue | null>(null);
 
 /**
- * Holds who/what is active for this browser tab. Per the prototype design none
- * of this is persisted: a reload drops the active user, workspace, and
- * collection, and the always-visible selectors prompt again.
+ * Holds who/what is active for this browser tab. `currentUser` mirrors the
+ * signed-in Clerk session (`null` while signed out or before Clerk has
+ * loaded). `currentWorkspace`/`currentCollection` are not persisted: a reload
+ * drops them and the relevant pages prompt again.
  */
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { user, isLoaded: isUserLoaded } = useUser();
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(
     null,
   );
@@ -38,11 +45,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     null,
   );
 
-  const selectUser = useCallback((user: User | null) => {
-    setCurrentUser(user);
-    setCurrentWorkspace(null);
-    setCurrentCollection(null);
-  }, []);
+  const currentUser: SessionUser | null = useMemo(() => {
+    if (!user) return null;
+    return {
+      id: user.id,
+      name: user.fullName ?? user.username ?? "Unnamed",
+      email: user.primaryEmailAddress?.emailAddress ?? "",
+    };
+  }, [user]);
 
   const selectWorkspace = useCallback((workspace: Workspace | null) => {
     setCurrentWorkspace(workspace);
@@ -56,17 +66,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       currentUser,
+      isUserLoaded,
       currentWorkspace,
       currentCollection,
-      selectUser,
       selectWorkspace,
       selectCollection,
     }),
     [
       currentUser,
+      isUserLoaded,
       currentWorkspace,
       currentCollection,
-      selectUser,
       selectWorkspace,
       selectCollection,
     ],

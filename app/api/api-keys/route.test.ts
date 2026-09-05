@@ -2,8 +2,18 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@clerk/nextjs/server", () => ({
+  auth: vi.fn(),
+  currentUser: vi.fn(async () => ({
+    fullName: "Test User",
+    username: "testuser",
+    primaryEmailAddress: { emailAddress: "test@example.com" },
+  })),
+}));
+
+import { auth } from "@clerk/nextjs/server";
 import { createRecord, type StoredRecord } from "@/lib/server/json-store";
 
 import { DELETE } from "./[id]/route";
@@ -15,6 +25,7 @@ let workspace: StoredRecord;
 beforeEach(async () => {
   dataDir = await mkdtemp(path.join(tmpdir(), "jsonify-api-keys-"));
   process.env.JSONIFY_DATA_DIR = dataDir;
+  vi.mocked(auth).mockResolvedValue({ userId: "test-user" } as never);
   workspace = await createRecord("workspaces", {
     name: "Cocina",
     slug: "cocina",
@@ -120,5 +131,13 @@ describe("api-keys route handlers", () => {
 
     const missing = await DELETE(postRequest({}), itemContext(created.id));
     expect(missing.status).toBe(404);
+  });
+
+  it("rejects requests with no signed-in user", async () => {
+    vi.mocked(auth).mockResolvedValue({ userId: null } as never);
+    const response = await POST(
+      postRequest({ name: "A", workspaceId: workspace.id, scopes: ["*"] }),
+    );
+    expect(response.status).toBe(401);
   });
 });

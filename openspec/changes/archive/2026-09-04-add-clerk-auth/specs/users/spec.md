@@ -1,11 +1,4 @@
-# users Specification
-
-## Purpose
-Provides a prototype user identity for Jsonify — a person who owns workspaces —
-without any authentication, so the SaaS hierarchy (User → Workspace → Collection)
-can be exercised end to end before real auth exists.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Manage users through a persistence boundary
 
@@ -25,3 +18,17 @@ The system SHALL persist a user profile record in the project-local JSON store, 
 
 - **WHEN** the server cannot reach the local JSON store to read or write a profile
 - **THEN** the authenticated request still proceeds using Clerk's own session data for identity, and the profile sync is skipped rather than blocking the request
+
+## REMOVED Requirements
+
+### Requirement: Create a user
+
+**Reason**: Account creation is now handled by Clerk's hosted sign-up flow (see the `clerk-authentication` capability); the application no longer collects or stores a password itself.
+
+**Migration**: Use Clerk sign-up. Any existing prototype users created through the old form are not carried over; there is no prior password to migrate since accounts must be recreated in Clerk.
+
+### Requirement: Select the active user
+
+**Reason**: The active user is now derived automatically from the signed-in Clerk session (see the `clerk-authentication` capability) instead of being chosen manually from an always-visible selector.
+
+**Migration**: None required for callers — code that read the active user from session context continues to do so; the value now comes from the Clerk session instead of manual selection.
