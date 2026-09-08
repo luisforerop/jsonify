@@ -28,9 +28,14 @@ npm run db:migrate   # apply db/migrations to it
 
 `DATABASE_URL` (in `.env.local`, see `.env.example`) points at that database —
 `postgres://jsonify:jsonify@localhost:5432/jsonify` by default. After changing
-`db/schema.ts`, run `npm run db:generate` to emit a new migration and commit it.
-There is no automatic data migration from the old `data/jsonify.json` file store
-(it held throwaway data); a fresh database starts empty.
+`db/schema.ts`, run `npm run db:generate` to emit a new migration and commit it
+(both `db/migrations/*.sql` and the `db/migrations/meta/` files — drizzle-kit
+needs the `meta/` snapshot to diff the next change). There is no automatic data
+migration from the old `data/jsonify.json` file store (it held throwaway data); a
+fresh database starts empty.
+
+`npm run db:migrate` (drizzle-kit) is for local use. Deploys run the standalone
+`npm run db:deploy` instead — see [Deployment](#deployment).
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
@@ -106,17 +111,51 @@ curl -s http://localhost:3000/api/v1/collections/recetas/records \
   -H "x-workspace-id: <workspace-id>"
 ```
 
+## Deployment
+
+Deployed on a VPS via [Dokploy](https://dokploy.com) using its Nixpacks builder.
+
+### Node version
+
+Next.js 16 requires Node `>=20.9.0`. Nixpacks defaults to Node 18, so the repo
+pins the runtime with `.nvmrc` (`22`) and `engines.node` in `package.json`. If
+the builder still picks an old version, set `NIXPACKS_NODE_VERSION=22` in the
+Dokploy app's environment.
+
+### Environment variables
+
+Set these in the Dokploy app's **Environment** tab (they are stored on your
+server, not in the repo):
+
+| Variable | Notes |
+| --- | --- |
+| `DATABASE_URL` | `postgres://user:password@host:5432/db`. User and password live in this string; there are no separate vars. For a Postgres created inside Dokploy, use its **internal** connection URL and keep both services in the same project. Runtime only — never inlined into the client bundle. |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Needed at build time; public by design. |
+| `CLERK_SECRET_KEY` | Runtime, server-only. |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` etc. | Same routing values as `.env.example`. |
+
+### Migrations
+
+`npm run start` runs `node db/migrate.mjs` before `next start`, so schema
+migrations are applied automatically on every container boot (idempotent — once
+everything is applied it is a no-op).
+
+`db/migrate.mjs` is a standalone runner that only uses `drizzle-orm` and `pg`
+(both runtime dependencies); it does **not** need `drizzle-kit`, which is a
+devDependency pruned from the production image. It reads `db/migrations/`
+(ordered via `meta/_journal.json`) and tracks applied migrations in the
+`drizzle.__drizzle_migrations` table inside the database itself, so what has and
+hasn't run is per-database state — committing a migration never applies it
+anywhere.
+
+To run migrations manually instead (e.g. a one-off against production), call
+`npm run db:deploy` with `DATABASE_URL` pointing at the target database from a
+machine that can reach it, or override the Dokploy start command.
+
+New migrations reach production the normal way: `npm run db:generate` locally →
+commit `db/migrations/**` → deploy.
+
 ## Learn More
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Next.js Documentation](https://nextjs.org/docs) — Next.js features and API.
+- [Drizzle ORM — Migrations](https://orm.drizzle.team/docs/migrations)
