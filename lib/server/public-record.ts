@@ -1,10 +1,10 @@
-import type { StoredRecord } from "@/lib/server/json-store";
+import type { RecordRow } from "@/lib/server/repositories";
 
 /**
  * A record as exposed by the public `/api/v1` API. The submitted values live
  * under `content`; `schemaVersion` is the name of the schema the record was
- * validated against. Internal association fields (`collectionId`, `schemaId`,
- * the generated display `name`) are not surfaced.
+ * validated against (resolved by the caller from `record.schemaId`). Internal
+ * association fields are not surfaced.
  */
 export type PublicRecord = {
   id: string;
@@ -14,13 +14,15 @@ export type PublicRecord = {
   updatedAt: string;
 };
 
-export function toPublicRecord(stored: StoredRecord): PublicRecord {
+export function toPublicRecord(
+  record: RecordRow,
+  schemaName: string,
+): PublicRecord {
   return {
-    id: stored.id,
-    schemaVersion:
-      typeof stored.schemaName === "string" ? stored.schemaName : "",
-    content: stored.values ?? {},
-    createdAt: stored.createdAt,
-    updatedAt: stored.updatedAt,
+    id: record.id,
+    schemaVersion: schemaName,
+    content: record.payload ?? {},
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
   };
 }

@@ -1,21 +1,20 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { JsonSchema } from "@/lib/schema-builder";
 import { generateApiKey } from "@/lib/server/api-keys";
-import { createRecord, type StoredRecord } from "@/lib/server/json-store";
+import { resetRepositories, setRepositories } from "@/lib/server/repositories";
+import type { Collection, SchemaRow, Workspace } from "@/lib/server/repositories";
+import { makeFakeRepositories } from "@/lib/server/repositories/testing";
 
 import { GET, POST } from "./route";
 
-let dataDir = "";
-let workspace: StoredRecord;
-let collection: StoredRecord;
-let schema: StoredRecord;
+let repos: ReturnType<typeof makeFakeRepositories>;
+let workspace: Workspace;
+let collection: Collection;
+let schema: SchemaRow;
 let apiKey: string;
 
-const schemaDoc = {
+const schemaDoc: JsonSchema = {
   type: "object",
   properties: {
     nombre: { type: "string" },
@@ -25,40 +24,37 @@ const schemaDoc = {
 };
 
 beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(tmpdir(), "jsonify-v1-records-"));
-  process.env.JSONIFY_DATA_DIR = dataDir;
-  workspace = await createRecord("workspaces", {
+  repos = makeFakeRepositories();
+  setRepositories(repos);
+  workspace = await repos.workspaces.create({
     name: "Cocina",
     slug: "cocina",
     ownerId: "u1",
   });
-  collection = await createRecord("collections", {
+  collection = await repos.collections.create({
     name: "Recetas",
     slug: "recetas",
     workspaceId: workspace.id,
     isPublic: true,
   });
-  schema = await createRecord("schemas", {
+  schema = await repos.schemas.create({
     name: "Receta",
     collectionId: collection.id,
-    workspaceId: workspace.id,
-    schema: schemaDoc,
+    schemaDefinition: schemaDoc,
   });
   const generated = generateApiKey();
   apiKey = generated.key;
-  await createRecord("apiKeys", {
+  await repos.apiKeys.create({
     name: "Test key",
     workspaceId: workspace.id,
     keyHash: generated.keyHash,
     keyPrefix: generated.keyPrefix,
     scopes: ["*"],
-    lastUsedAt: null,
   });
 });
 
-afterEach(async () => {
-  delete process.env.JSONIFY_DATA_DIR;
-  await rm(dataDir, { recursive: true, force: true });
+afterEach(() => {
+  resetRepositories();
 });
 
 const ctx = { params: Promise.resolve({ collectionSlug: "recetas" }) };
@@ -123,12 +119,11 @@ describe("v1 records collection route", () => {
 
   it("GET paginates with page and limit and reports the full total", async () => {
     for (let i = 0; i < 25; i += 1) {
-      await createRecord("records", {
-        name: `Receta ${i}`,
+      await repos.records.create({
+        workspaceId: workspace.id,
         collectionId: collection.id,
         schemaId: schema.id,
-        schemaName: "Receta",
-        values: { nombre: `Receta ${i}` },
+        payload: { nombre: `Receta ${i}` },
       });
     }
 
@@ -170,13 +165,12 @@ describe("v1 records collection route", () => {
 
   it("POST with a key that lacks a write scope is 403", async () => {
     const generated = generateApiKey();
-    await createRecord("apiKeys", {
+    await repos.apiKeys.create({
       name: "Read only",
       workspaceId: workspace.id,
       keyHash: generated.keyHash,
       keyPrefix: generated.keyPrefix,
       scopes: ["read:recetas"],
-      lastUsedAt: null,
     });
     const response = await POST(
       req({

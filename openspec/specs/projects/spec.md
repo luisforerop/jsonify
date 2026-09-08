@@ -12,8 +12,10 @@ The system SHALL allow the active user to create a collection within the active
 workspace by entering a name and an optional description. The system SHALL
 generate a `slug` from the name by lowercasing it and replacing runs of
 non-alphanumeric characters with single hyphens. The collection SHALL be stored
-with `workspaceId` set to the active workspace. Creating a collection SHALL
-require an active workspace.
+with `workspaceId` set to the active workspace and the optional `description`
+when given. Uniqueness of the slug within the workspace SHALL be enforced
+atomically by a database unique index rather than by a read-compare-write check.
+Creating a collection SHALL require an active workspace.
 
 #### Scenario: Create a collection with a name
 
@@ -33,7 +35,7 @@ require an active workspace.
 #### Scenario: Reject a duplicate slug within a workspace
 
 - **WHEN** the user creates a collection whose generated slug matches another collection in the same workspace
-- **THEN** the system reports the conflict and does not create a second collection with that slug in that workspace
+- **THEN** the database unique index rejects the insert, the system reports the conflict, and no second collection with that slug exists in that workspace
 
 ### Requirement: List and open collections
 
@@ -70,12 +72,14 @@ its slug.
 
 The system SHALL allow the user to delete a collection. Deleting a collection
 SHALL also delete the saved schemas and records associated with that collection,
-since they have no meaning without their owning collection.
+since they have no meaning without their owning collection. This cascade SHALL be
+enforced by the database on delete rather than by successive client-side hook
+calls.
 
 #### Scenario: Delete a collection
 
 - **WHEN** the user deletes a collection
-- **THEN** the system removes the collection, its saved schemas, and its records through their respective persistence hooks, and the collection no longer appears in the collections list
+- **THEN** the system removes the collection, and its saved schemas and records are removed by database cascade, so the collection and its data no longer appear in any list
 
 #### Scenario: Deleting the active collection
 
@@ -98,7 +102,7 @@ collection context.
 The system SHALL expose create, read, update, and delete operations for
 collections through external client-side hooks. The collections view SHALL use
 those hooks rather than accessing browser localStorage directly. The hook
-implementation SHALL persist collections in a project-local JSON file through the
+implementation SHALL persist collections in the relational store through the
 server, and its create, read, update, and delete operations SHALL be
 asynchronous. A saved collection SHALL remain available after the browser page is
 reloaded, including from a different browser or machine using the same server,

@@ -1,5 +1,5 @@
 import { corsJson, preflight } from "@/lib/server/cors";
-import { createRecord, listCollection } from "@/lib/server/json-store";
+import { repositories } from "@/lib/server/repositories";
 import { resolvePublicContext } from "@/lib/server/public-api-context";
 import { toPublicRecord } from "@/lib/server/public-record";
 import {
@@ -39,9 +39,11 @@ export async function GET(
   });
   if (!resolved.ok) return resolved.response;
 
-  const all = (await listCollection("records")).filter(
-    (row) => row.collectionId === resolved.collection.id,
-  );
+  const [all, schemas] = await Promise.all([
+    repositories.records.listByCollection(resolved.collection.id),
+    repositories.schemas.listByCollection(resolved.collection.id),
+  ]);
+  const schemaName = new Map(schemas.map((row) => [row.id, row.name]));
 
   const params = new URL(request.url).searchParams;
   const page = positiveInt(params.get("page"), DEFAULT_PAGE);
@@ -49,7 +51,9 @@ export async function GET(
   const start = (page - 1) * limit;
 
   return corsJson({
-    items: all.slice(start, start + limit).map(toPublicRecord),
+    items: all
+      .slice(start, start + limit)
+      .map((row) => toPublicRecord(row, schemaName.get(row.schemaId) ?? "")),
     pagination: { total: all.length, page, limit },
   });
 }
@@ -65,7 +69,7 @@ export async function POST(
   });
   if (!resolved.ok) return resolved.response;
 
-  const { collection, schema } = resolved;
+  const { workspace, collection, schema } = resolved;
   if (!schema) {
     return corsJson({ error: "Missing x-schema header" }, { status: 400 });
   }
@@ -83,16 +87,15 @@ export async function POST(
   const validation = validatePayload(schema, body);
   if (!validation.valid) return invalidPayloadResponse(validation);
 
-  const record = await createRecord("records", {
-    name: request.headers.get("x-record-name") || `${schema.name} ${Date.now()}`,
+  const record = await repositories.records.create({
+    workspaceId: workspace.id,
     collectionId: collection.id,
     schemaId: schema.id,
-    schemaName: schema.name,
-    values: body,
+    payload: body,
   });
 
   return corsJson(
-    { data: toPublicRecord(record), id: record.id },
+    { data: toPublicRecord(record, schema.name), id: record.id },
     { status: 201 },
   );
 }

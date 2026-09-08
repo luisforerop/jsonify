@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { installCollectionFetchStub } from "./collection-fetch-stub";
 import { useRecords } from "./use-records";
 
-const values = { name: "Ada" };
+const payload = { name: "Ada" };
 const collectionId = "collection-1";
 
 afterEach(() => {
@@ -23,11 +23,9 @@ describe("useRecords", () => {
       id =
         (
           await result.current.create({
-            name: "Ada's profile",
             collectionId,
             schemaId: "schema-1",
-            schemaName: "Customer",
-            values,
+            payload,
           })
         )?.id ?? "";
     });
@@ -40,15 +38,12 @@ describe("useRecords", () => {
 
     await act(async () => {
       await result.current.update(id, {
-        name: "Ada's updated profile",
         collectionId,
         schemaId: "schema-1",
-        schemaName: "Customer",
-        values: { name: "Grace" },
+        payload: { name: "Grace" },
       });
     });
-    expect(result.current.records[0]?.name).toBe("Ada's updated profile");
-    expect(result.current.records[0]?.values).toEqual({ name: "Grace" });
+    expect(result.current.records[0]?.payload).toEqual({ name: "Grace" });
 
     await act(async () => {
       await result.current.remove(id);
@@ -61,21 +56,19 @@ describe("useRecords", () => {
     store.push(
       {
         id: "a1",
-        name: "Ada",
+        workspaceId: "w1",
         collectionId: "a",
         schemaId: "s1",
-        schemaName: "Customer",
-        values,
+        payload,
         createdAt: "",
         updatedAt: "",
       },
       {
         id: "b1",
-        name: "Grace",
+        workspaceId: "w1",
         collectionId: "b",
         schemaId: "s1",
-        schemaName: "Customer",
-        values,
+        payload,
         createdAt: "",
         updatedAt: "",
       },
@@ -84,7 +77,7 @@ describe("useRecords", () => {
     const scopedToA = renderHook(() => useRecords("a"));
     await waitFor(() => expect(scopedToA.result.current.isLoaded).toBe(true));
     expect(scopedToA.result.current.records).toHaveLength(1);
-    expect(scopedToA.result.current.records[0]?.name).toBe("Ada");
+    expect(scopedToA.result.current.records[0]?.id).toBe("a1");
   });
 
   it("surfaces an error when the API is unreachable", async () => {

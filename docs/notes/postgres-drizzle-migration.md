@@ -1,13 +1,45 @@
 # Migración a Postgres + Drizzle — notas de exploración
 
-Fecha: 2026-09-04
-Estado: exploración / pre-propuesta (aún no se ha creado un change de OpenSpec)
+Fecha: 2026-09-05
+Estado: exploración con requerimientos técnicos definitivos (aún no se ha creado
+un change de OpenSpec)
 
-Este documento captura el análisis inicial de cómo fluyen los datos hoy en Jsonify
-(storage en archivo JSON) y cómo se vería una migración a Postgres usando Drizzle
-ORM. Es una nota de diseño, no una implementación ni una propuesta lista para
-ejecutar: el orden real de trabajo (¿auth primero o DB primero?) todavía está
-por decidir — ver "Secuenciación" más abajo.
+Este documento captura el análisis de cómo fluyen los datos hoy en Jsonify
+(storage en archivo JSON) y cómo se ve la migración a Postgres usando Drizzle
+ORM. La secuenciación ya está resuelta: **la autenticación (Clerk) y el manejo
+de API Keys ya están implementados en `main`** (commits `5d122b2` y `a4ca0e9`),
+así que esta migración se diseña sobre ese estado, no antes de él.
+
+## 0. Contexto y premisas de dominio (definitivas)
+
+- **Autenticación de usuarios: YA implementada vía Clerk.** Clerk se usa
+  *exclusivamente* para identidad. El identificador es el `clerk_user_id`
+  (formato `user_2x…`), que se modela como **`text`** y es la PK de `users`.
+  No hay contraseñas, tokens de sesión ni columnas de proveedor de auth en la
+  base de datos: eso vive en Clerk. Hoy `lib/server/require-auth.ts` resuelve
+  `auth()` → `userId` y `lib/server/user-profile.ts` mantiene una fila-caché
+  local de perfil (`ensureUserProfile`) en la primera request autenticada.
+  Esa fila-caché se convierte en la tabla `users` real de Postgres.
+- **Multi-tenancy: CUSTOM.** Se descarta Clerk Organizations / `org_id`. El
+  tenant se gestiona internamente:
+  - `workspaces` es la unidad de tenant.
+  - la membresía y los roles se modelan con `workspace_members` (relacional).
+  - las invitaciones también serán relacionales (no un flujo de Clerk), pero
+    **no entran en este change** — ver
+    `docs/notes/workspace-invitations.md`.
+- **Autenticación Machine-to-Machine (M2M): YA implementada vía API Keys a
+  nivel de Workspace.** `lib/server/api-keys.ts` genera la clave (`jfy_…`),
+  guarda `keyHash` (sha256) + `keyPrefix` y valida scopes con el patrón
+  `(*|(read|write|delete):(*|<slug>))`. `lib/server/public-api-context.ts`
+  resuelve el contexto público (`x-workspace-id`, `x-schema`,
+  `Authorization: Bearer`) leyendo el store directamente. Esa resolución debe
+  pasar a apoyarse en los repositorios (§3).
+- **Testing: CANCELADO para esta fase.** No se crean suites de tests
+  unitarios ni de integración de base de datos como parte de esta migración.
+  La nota previa sobre "migrar la suite de tests a Postgres" queda **anulada**
+  (ver §5). Los tests actuales que dependen de `JSONIFY_DATA_DIR` +
+  `mkdtemp` seguirán existiendo hasta que se retire `json-store`, pero
+  adaptarlos no es un entregable de esta fase.
 
 ## 1. Estado actual (`lib/server/json-store.ts`)
 
@@ -28,139 +60,286 @@ Un único archivo `data/jsonify.json` con seis colecciones planas:
   headers (`x-workspace-id`, `x-schema`, `Authorization: Bearer`), valida el
   payload contra un JSON Schema guardado por el usuario (Ajv, en
   `lib/server/validate-payload.ts`) y crea el record directamente.
-- No hay sesión de servidor: `app/session-context.tsx` guarda el usuario/
-  workspace/collection activos solo en memoria de React (se pierde al
-  refrescar). `users.password` se guarda en texto plano.
+- La identidad ya es real (Clerk); lo que sigue siendo frágil es la
+  **persistencia**: sin sesión de servidor persistente para el estado de UI
+  (`app/session-context.tsx` guarda workspace/collection activos solo en
+  memoria de React) y sin constraints en el storage.
 
-### Relación entre entidades
+### Relación entre entidades (destino)
 
 ```
 users ──1:N── workspaces ──1:N── collections ──1:N── schemas
-                   │                   │                │
-                   │                   │                └─┬─1:N─ records
-                   │                   └───────────────────┘
-                   └──1:N── apiKeys (scope por collection.slug dentro del workspace)
+  │              │  │  │              │                │
+  │              │  │  │              │                └─1:N─ records
+  │              │  │  │              └──────────────────────┘ (records.collection_id)
+  │              │  └──1:N── api_keys
+  │              └──1:N── workspace_members ──N:1── users
+  └──(owner_id) workspaces.owner_id
 ```
 
-### Gaps encontrados en el modelo actual (independientes del motor de storage)
+`records` referencia además `workspace_id` directamente (además de
+`collection_id` y `schema_id`) para poder filtrar por tenant sin joins.
+
+### Gaps del modelo actual y su resolución en esta fase
 
 1. **Unicidad de `slug` resuelta en la app, no en el storage.**
-   `createSluggedResponse` lista los "hermanos" (mismo `ownerId` o
-   `workspaceId`), compara localmente y luego inserta. Esto solo es seguro hoy
-   porque `withLock` serializa *todas* las escrituras del proceso — es una
-   condición de carrera (TOCTOU) si alguna vez hay conexiones concurrentes
-   reales, como pasaría con Postgres.
-2. **No hay cascada de borrado.** Borrar un workspace no borra sus
-   collections/schemas/records; quedan huérfanos. Postgres va a forzar una
-   decisión explícita (`CASCADE` / `RESTRICT`) al definir las FKs.
-3. **Passwords en texto plano.** No es responsabilidad de esta migración
-   arreglarlo, pero es un vecino directo del futuro sistema de auth.
-4. **Sin sesión de servidor / auth real.** El "usuario actual" es un adorno de
-   UI en el cliente, no un principal de seguridad.
+   `createSluggedResponse` lista los "hermanos" y compara localmente; hoy solo
+   es seguro porque `withLock` serializa *todo* el proceso — TOCTOU en cuanto
+   haya concurrencia real.
+   → **Resuelto:** `unique index` compuesto en Postgres
+   (`workspaces (owner_id, slug)`; `collections (workspace_id, slug)`;
+   `workspace_members (workspace_id, user_id)`; `schemas (collection_id, name)`;
+   `api_keys.key_hash`). El repositorio traduce la violación de unique a un
+   error de dominio ("nombre ya usado aquí").
+2. **No hay cascada de borrado.** Borrar un workspace deja
+   collections/schemas/records huérfanos.
+   → **Resuelto:** FKs con `onDelete` explícito (ver §2). Decisión base:
+   `workspaces → collections → schemas → records` en cascada; `users` con
+   `restrict` sobre `workspaces.owner_id`. El flujo de aplicación para borrar
+   un usuario dueño (pre-check, transferencia de propiedad, flag de cascada
+   explícita) queda **diferido** — ver
+   `docs/notes/account-deletion-ownership-transfer.md`. La DB ya garantiza la
+   integridad con el `RESTRICT`.
+3. **Passwords en texto plano.** → **Ya no aplica.** Clerk es el sistema de
+   auth; `users` no tiene contraseña.
+4. **Sin sesión de servidor / auth real.** → **Ya no aplica** para identidad
+   (Clerk). Persistir el estado de UI activo (workspace/collection) es un
+   nice-to-have separado, fuera de alcance.
 
-## 2. Decisiones tomadas para esta fase
+## 2. Especificación estricta de tablas en Drizzle (`db/schema.ts`)
 
-- **Alcance: solo entorno local / desarrollo.** La elección de proveedor de
-  Postgres para producción (Neon, Supabase, RDS, self-hosted, etc.) se pospone
-  a cuando se defina el despliegue. Localmente: Postgres vía Docker Compose.
-- **Sin script de migración de datos.** El contenido actual de
-  `data/jsonify.json` es solo data de prueba; no hace falta preservarlo. El
-  cutover puede ser directo (crear el schema vacío en Postgres y seguir).
-- **Driver:** `drizzle-orm/node-postgres` sobre `pg`, el driver estándar para
-  Postgres local/self-hosted. Como la capa de acceso a datos queda detrás de
-  repositorios (ver más abajo), cambiar de driver más adelante para adaptarse
-  a un proveedor serverless (p. ej. `@neondatabase/serverless` en Vercel) es un
-  cambio aislado a la capa de infraestructura, no a la lógica de negocio.
-- **Gestión de schema:** migraciones versionadas con `drizzle-kit` (SQL
-  generado y commiteado), no DDL manual ni `push` directo a producción.
+Driver: `drizzle-orm/node-postgres` con cliente `pg`, preparado para
+ejecución en Docker/VPS. El wiring vive en `db/` (`db/schema.ts`,
+`db/client.ts`); las migraciones se generan y commitean con `drizzle-kit`
+(SQL versionado, sin `push` directo a producción).
 
-### Decisión de arquitectura: desacoplar detrás de repositorios
+Convención de columnas comunes: `created_at timestamptz not null default now()`,
+`updated_at timestamptz not null default now()` (el repositorio actualiza
+`updated_at` en cada write). Los nombres de columna en Postgres van en
+`snake_case`; los de la propiedad Drizzle en `camelCase`.
 
-Para cumplir con "código lo más desacoplado posible": en vez de que las route
-handlers importen `db` y las tablas de Drizzle directamente, se introduce una
-capa de repositorios con una interfaz por entidad (`UserRepository`,
-`WorkspaceRepository`, `CollectionRepository`, `SchemaRepository`,
-`RecordRepository`, `ApiKeyRepository`), análoga en espíritu al actual
-`CollectionName`-keyed store pero tipada por entidad en vez de genérica por
-string.
+### 2.1 `users`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `text` **PK** | proveniente de Clerk (`user_2x…`); **no** autogenerada |
+| `name` | `text` | |
+| `email` | `text` | `unique` |
+
+Sin contraseñas ni columnas de auth. Se puebla desde `ensureUserProfile`.
+
+### 2.2 `workspaces`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `uuid` **PK** | `default gen_random_uuid()` |
+| `name` | `text` | |
+| `slug` | `text` | ver constraint |
+| `ownerId` / `owner_id` | `text` | **FK → `users.id`**, `onDelete: 'restrict'` |
+
+Constraint: `uniqueIndex(owner_id, slug)` — el slug es único **dentro de los
+workspaces del mismo owner** (igual que hoy), no globalmente.
+
+`onDelete: 'restrict'` sobre `owner_id` deja la puerta abierta a un servicio
+de transferencia de propiedad / borrado de cuenta que **no** se especifica en
+este change (ver `docs/notes/account-deletion-ownership-transfer.md`).
+
+### 2.3 `workspace_members`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `uuid` **PK** | `default gen_random_uuid()` |
+| `workspaceId` / `workspace_id` | `uuid` | **FK → `workspaces.id`**, `onDelete: 'cascade'` |
+| `userId` / `user_id` | `text` | **FK → `users.id`**, `onDelete: 'cascade'` |
+| `role` | `text` | `default 'member'` |
+
+Constraint: `uniqueIndex(workspace_id, user_id)`.
+
+Nota: el `owner` de un workspace debería tener también una fila aquí con
+`role = 'owner'` (lo garantiza la capa de servicio al crear el workspace).
+
+### 2.4 `collections`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `uuid` **PK** | `default gen_random_uuid()` |
+| `workspaceId` / `workspace_id` | `uuid` | **FK → `workspaces.id`**, `onDelete: 'cascade'` |
+| `name` | `text` | |
+| `slug` | `text` | ver constraint |
+| `description` | `text` | **nullable / opcional** — ayuda al usuario a documentar la collection |
+| `isPublic` / `is_public` | `boolean` | `default false` |
+
+Constraint: `uniqueIndex(workspace_id, slug)`.
+
+`description` se conserva (ya existe hoy en el store) como columna opcional:
+aporta contexto útil al usuario y no añade complejidad.
+
+### 2.5 `api_keys`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `uuid` **PK** | `default gen_random_uuid()` |
+| `workspaceId` / `workspace_id` | `uuid` | **FK → `workspaces.id`**, `onDelete: 'cascade'` |
+| `keyHash` / `key_hash` | `text` | `unique` |
+| `keyPrefix` / `key_prefix` | `text` | para mostrar en UI |
+| `scopes` | `jsonb` | array de strings (p. ej. `["read:*", "write:posts"]`) |
+
+Campos operativos que ya se usan hoy y conviene conservar: `name text`,
+`lastUsedAt / last_used_at timestamptz` nullable (lo escribe
+`resolvePublicContext` de forma best-effort).
+
+### 2.6 `schemas`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `uuid` **PK** | `default gen_random_uuid()` |
+| `collectionId` / `collection_id` | `uuid` | **FK → `collections.id`**, `onDelete: 'cascade'` |
+| `name` | `text` | asignado por el usuario (p. ej. `"v1"`, `"v2"`) |
+| `schemaDefinition` / `schema_definition` | `jsonb` | el JSON Schema |
+| `isActive` / `is_active` | `boolean` | `default true` |
+
+Constraint: `uniqueIndex(collection_id, name)`.
+
+Cambios vs. hoy: la columna `schema` pasa a llamarse `schema_definition`;
+se añade `is_active`; se elimina cualquier `workspace_id` en esta tabla
+(se llega al workspace vía `collection`). `validate-payload.ts` debe leer
+`schemaDefinition` en vez de `schema`.
+
+### 2.7 `records`
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `uuid` **PK** | `default gen_random_uuid()` |
+| `workspaceId` / `workspace_id` | `uuid` | **FK → `workspaces.id`**, `onDelete: 'cascade'` |
+| `collectionId` / `collection_id` | `uuid` | **FK → `collections.id`**, `onDelete: 'cascade'` |
+| `schemaId` / `schema_id` | `uuid` | **FK → `schemas.id`**, `onDelete: 'restrict'` (no borrar un schema con records; decisión de servicio) |
+| `payload` | `jsonb` | **índice GIN** (`create index … using gin (payload)`) |
+
+Cambios vs. hoy: `values` → `payload`; se añade `workspace_id` denormalizado
+para filtrar por tenant sin join; desaparecen `name` y `schema_name`
+(el nombre del schema se resuelve vía `schema_id`).
+
+Consecuencia en specs: el requisito "Identify saved records by name" de
+`schema-form-filler` se elimina — los records guardados ya no llevan un nombre
+dado por el usuario; se identifican por su schema y su fecha.
+
+### 2.8 `payload` y `schema_definition` siguen siendo `jsonb`
+
+Son JSON Schema y payloads definidos libremente por el usuario final (el
+corazón del producto); no se relacionalizan. Ajv sigue validando en la capa de
+aplicación exactamente como hoy. El índice GIN sobre `records.payload` habilita
+filtros/consultas por contenido más adelante sin cambio de schema.
+
+### 2.9 `invitations` — fuera de alcance
+
+Las invitaciones de workspace **no entran en este change**. La tabla, sus
+constraints y el flujo de aceptación se especifican en
+`docs/notes/workspace-invitations.md`. `workspace_members` (§2.3) sí entra:
+las membresías se pueden crear directamente (p. ej. añadiendo al owner al
+crear el workspace) sin necesidad del flujo de invitación.
+
+## 3. Arquitectura y entregables
+
+### 3.1 Capa de repositorios (interfaces primero)
+
+Entregable #1: **interfaces TypeScript desacopladas en
+`lib/server/repositories/`**, definidas *antes* de escribir persistencia con
+Drizzle. Las route handlers y server actions dependen de estas interfaces, no
+de `db` ni de las tablas de Drizzle.
 
 ```
-route handlers / server actions
+route handlers / server actions / public-api-context
         │  (dependen de interfaces, no de Drizzle)
         ▼
-  Repository interfaces  (lib/server/repositories/*.ts)
+  Repository interfaces        lib/server/repositories/<entity>.ts
         │
         ▼
-  Implementación Drizzle  (lib/server/db/*.ts)
+  Implementación Drizzle       lib/server/repositories/drizzle/<entity>.ts
         │
         ▼
-     Postgres
+  db (schema + cliente pg)     db/schema.ts, db/client.ts
+        │
+        ▼
+     Postgres (Docker / VPS)
 ```
 
-Razones:
-- Los route handlers y componentes de servidor dejan de saber que existe
-  Drizzle o Postgres; solo conocen la forma de la entidad y las operaciones
-  disponibles.
-- Facilita tests (se puede mockear el repositorio) y un futuro cambio de
-  proveedor/driver sin tocar lógica de negocio.
-- Reemplaza naturalmente los "gaps" del punto 1: las comprobaciones de slug
-  único y las reglas de cascada se expresan como constraints de Postgres
-  (unique index compuesto, `onDelete`) en vez de chequeos manuales en la app.
+Interfaces por entidad:
 
-## 3. Boceto de tablas (Drizzle) — a validar en el diseño real del change
+- `UserRepository`
+- `WorkspaceRepository`
+- `WorkspaceMemberRepository`
+- `CollectionRepository`
+- `SchemaRepository`
+- `RecordRepository`
+- `ApiKeyRepository`
 
-| Tabla | Columnas clave | Constraints que hoy NO existen y se añaden |
-|---|---|---|
-| `users` | id uuid pk, name, email, password_hash | unique(email) |
-| `workspaces` | id, name, slug, owner_id fk→users | unique(owner_id, slug) |
-| `collections` | id, name, slug, workspace_id fk, description, is_public | unique(workspace_id, slug), fk on delete cascade |
-| `schemas` | id, name, schema **jsonb**, workspace_id fk, collection_id fk | fk(collection_id) on delete cascade |
-| `records` | id, name, collection_id fk, schema_id fk, schema_name, values **jsonb** | fk(collection_id) on delete cascade |
-| `api_keys` | id, name, workspace_id fk, key_hash, key_prefix, scopes text[]/jsonb, last_used_at | unique(key_hash), fk on delete cascade |
+(`InvitationRepository` queda fuera — ver `docs/notes/workspace-invitations.md`.)
 
-`schema.schema` y `records.values` se mantienen como `jsonb`: son JSON Schema y
-payloads definidos libremente por el usuario final (el corazón del producto),
-no deben convertirse en columnas relacionales fijas. Ajv sigue validando en la
-capa de aplicación exactamente como hoy.
+Cada interfaz expone operaciones tipadas por entidad (`findById`, `list`,
+`create`, `update`, `delete`, más las específicas: `WorkspaceRepository
+.findBySlug`, `ApiKeyRepository.findByHash`, `SchemaRepository
+.listByCollection`, etc.). Reemplaza al store genérico `CollectionName`-keyed.
 
-## 4. Anotaciones para más adelante (no se resuelven en esta exploración)
+Reglas de dominio que dejan de vivir en la app y pasan a constraints:
+unicidad de slug (unique index compuesto) y cascada de borrado (`onDelete`).
+El repositorio Drizzle traduce violaciones de constraint a errores de dominio.
 
-### Nota — user story pendiente: migrar la suite de tests a Postgres
+### 3.2 Driver y despliegue
 
-Hoy `lib/server/json-store.test.ts` logra aislamiento perfecto apuntando
-`JSONIFY_DATA_DIR` a un `mkdtemp` por test. Con Postgres hace falta una
-estrategia equivalente (Postgres real en Docker + rollback por test en una
-transacción, o algo embebido tipo `pglite` para no depender de un servicio
-externo en CI). **Crear una user story separada para esto** cuando se aborde
-la migración; no se resuelve en este documento.
+- **Driver:** `drizzle-orm/node-postgres` con cliente `pg`. Un único `Pool`
+  de `pg` en `db/client.ts`, configurado desde `DATABASE_URL`.
+- **Destino:** ejecución en **Docker / VPS** (no serverless). Localmente,
+  Postgres vía Docker Compose. La elección de proveedor gestionado para
+  producción queda abierta, pero el driver `node-postgres` + `pg` es
+  compatible con cualquier Postgres self-hosted o gestionado con conexión
+  TCP estándar.
+- **Migraciones:** `drizzle-kit generate` → SQL versionado y commiteado;
+  `drizzle-kit migrate` en el arranque/deploy. Sin `push` directo.
+- Cambiar a un driver serverless en el futuro (p. ej.
+  `@neondatabase/serverless`) sería un cambio aislado a `db/client.ts` +
+  la implementación Drizzle de los repos, sin tocar interfaces ni lógica de
+  negocio.
 
-### Nota — reevaluar gaps cuando se implemente autenticación
+### 3.3 Sin script de migración de datos
 
-El usuario indicó que es posible que el sistema de autenticación se implemente
-**antes** que esta migración a Postgres. Cuando se aborde el auth, revisar y
-decidir explícitamente qué pasa con los siguientes gaps (algunos listados en
-la sección 1, otros que interactúan directamente con el diseño de auth):
+El contenido de `data/jsonify.json` es data de prueba; no se preserva. El
+cutover es directo: crear el schema vacío en Postgres, apuntar los repos a
+Drizzle y retirar `json-store`.
 
-- Hash de `password` (hoy texto plano) y qué mecanismo de auth se usa (sesión
-  de servidor, JWT, cookies) — esto define si `users` necesita columnas
-  adicionales (p. ej. tokens de sesión, proveedor de auth) antes de fijar el
-  schema de Postgres.
-- Si el auth introduce un concepto real de "usuario autenticado", revisar si
-  las reglas de scope de `api_keys` (hoy por `workspaceId` + slug de
-  collection) siguen siendo suficientes o necesitan ligarse a permisos de
-  usuario.
-- Confirmar en ese momento las reglas de cascada de borrado (sección 3) contra
-  los requisitos reales de auth/autorización (p. ej. ¿borrar un usuario debe
-  borrar sus workspaces, o transferirlos?).
-- Revisar si conviene introducir el auth *antes* de fijar el schema de
-  Postgres para no tener que migrar el schema dos veces.
+## 4. Orden de trabajo sugerido para el change
+
+1. Docker Compose con Postgres + `DATABASE_URL` en `.env`.
+2. `db/schema.ts` con las 7 tablas de §2 (`users`, `workspaces`,
+   `workspace_members`, `collections`, `api_keys`, `schemas`, `records`) y
+   `db/client.ts` con el `Pool` de `pg`.
+3. `drizzle.config.ts` + primera migración generada y commiteada.
+4. Interfaces de repositorio en `lib/server/repositories/` (entregable #1,
+   sin implementación).
+5. Implementación Drizzle en `lib/server/repositories/drizzle/`.
+6. Reconectar consumidores:
+   - `collection-handlers.ts` → repos por entidad.
+   - `public-api-context.ts` → `WorkspaceRepository`, `CollectionRepository`,
+     `SchemaRepository`, `ApiKeyRepository`.
+   - `user-profile.ts` / `require-auth.ts` → `UserRepository`.
+   - `api-keys/route.ts` → `ApiKeyRepository` + `WorkspaceRepository`.
+   - `validate-payload.ts` → leer `schemaDefinition`.
+7. Retirar `lib/server/json-store.ts` y `data/jsonify.json`.
 
 ## 5. No-goals de esta fase
 
-- No se decide proveedor de Postgres para producción.
-- No se escribe script de migración/importación de `data/jsonify.json`.
-- No se implementa autenticación (es un change separado, potencialmente antes
-  que este).
-- No se escribe código todavía — este documento es insumo para un futuro
-  change de OpenSpec (`proposal.md` / `design.md` / `specs/`) cuando se decida
-  secuenciar este trabajo.
+- **No** se crean suites de tests unitarios ni de integración de base de datos
+  (cancelado explícitamente). La antigua "user story para migrar la suite de
+  tests a Postgres" queda anulada.
+- **No** se decide proveedor de Postgres gestionado para producción (sí se
+  fija el objetivo Docker/VPS con `node-postgres` + `pg`).
+- **No** se escribe script de migración/importación de `data/jsonify.json`.
+- **No** se toca la autenticación (Clerk) ni el mecanismo de API Keys: ambos
+  ya están implementados y esta migración solo cambia dónde se persisten sus
+  datos.
+- **No** se implementan las invitaciones de workspace (tabla `invitations` ni
+  su flujo de aceptación). Documentado como pendiente en
+  `docs/notes/workspace-invitations.md`.
+- **No** se implementa la capa de servicio de borrado de cuenta ni la
+  transferencia de propiedad de workspace. El `ON DELETE RESTRICT` entra en el
+  schema; el flujo de aplicación queda documentado como TODO en
+  `docs/notes/account-deletion-ownership-transfer.md`.

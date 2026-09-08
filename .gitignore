@@ -13,9 +13,6 @@
 # testing
 /coverage
 
-# local JSON data store
-/data/
-
 # next.js
 /.next/
 /out/

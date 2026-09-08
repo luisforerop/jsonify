@@ -2,12 +2,20 @@
 
 import { useState } from "react";
 
-import type { SavedRecord } from "@/hooks/use-records";
+import type { FormValues } from "@/lib/schema-form";
 
 import { PanelHeading } from "@/app/components/schema-builder/panel-heading";
 
+/** A saved record enriched with its source schema's name for display. */
+export type SavedEntry = {
+  id: string;
+  schemaLabel: string;
+  payload: FormValues;
+  updatedAt: string;
+};
+
 type SavedEntriesPanelProps = {
-  entries: SavedRecord[];
+  entries: SavedEntry[];
   activeEntryId: string | null;
   isLoaded: boolean;
   onOpenEntry: (id: string) => void;
@@ -26,10 +34,10 @@ export function SavedEntriesPanel({
     status: "copied" | "error";
   } | null>(null);
 
-  async function copyEntryValues(entry: SavedRecord): Promise<void> {
+  async function copyEntryValues(entry: SavedEntry): Promise<void> {
     try {
       await navigator.clipboard.writeText(
-        JSON.stringify(entry.values, null, 2),
+        JSON.stringify(entry.payload, null, 2),
       );
       setCopyState({ id: entry.id, status: "copied" });
     } catch {
@@ -63,17 +71,14 @@ export function SavedEntriesPanel({
               type="button"
               onClick={() => onOpenEntry(entry.id)}
             >
-              <strong>{entry.name}</strong>
-              <span>
-                {entry.schemaName} ·{" "}
-                {new Date(entry.updatedAt).toLocaleDateString()}
-              </span>
+              <strong>{entry.schemaLabel}</strong>
+              <span>{new Date(entry.updatedAt).toLocaleDateString()}</span>
             </button>
             <button
               className="copy-button"
               type="button"
               onClick={() => copyEntryValues(entry)}
-              aria-label={`Copy ${entry.name} as JSON`}
+              aria-label={`Copy ${entry.schemaLabel} record as JSON`}
               title="Copy as JSON"
             >
               {copyState?.id === entry.id
@@ -86,8 +91,8 @@ export function SavedEntriesPanel({
               className="delete-button"
               type="button"
               onClick={() => onDeleteEntry(entry.id)}
-              aria-label={`Delete ${entry.name}`}
-              title="Delete entry"
+              aria-label={`Delete ${entry.schemaLabel} record`}
+              title="Delete record"
             >
               Delete
             </button>

@@ -1,7 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -14,28 +10,31 @@ vi.mock("@clerk/nextjs/server", () => ({
 }));
 
 import { auth } from "@clerk/nextjs/server";
-import { createRecord, type StoredRecord } from "@/lib/server/json-store";
+
+import { resetRepositories, setRepositories } from "@/lib/server/repositories";
+import { makeFakeRepositories } from "@/lib/server/repositories/testing";
+import type { Workspace } from "@/lib/server/repositories";
 
 import { DELETE } from "./[id]/route";
 import { GET, POST } from "./route";
 
-let dataDir = "";
-let workspace: StoredRecord;
+let repos: ReturnType<typeof makeFakeRepositories>;
+let workspace: Workspace;
 
 beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(tmpdir(), "jsonify-api-keys-"));
-  process.env.JSONIFY_DATA_DIR = dataDir;
+  repos = makeFakeRepositories();
+  setRepositories(repos);
   vi.mocked(auth).mockResolvedValue({ userId: "test-user" } as never);
-  workspace = await createRecord("workspaces", {
+  workspace = await repos.workspaces.create({
     name: "Cocina",
     slug: "cocina",
     ownerId: "u1",
   });
 });
 
-afterEach(async () => {
-  delete process.env.JSONIFY_DATA_DIR;
-  await rm(dataDir, { recursive: true, force: true });
+afterEach(() => {
+  resetRepositories();
+  vi.restoreAllMocks();
 });
 
 function listRequest(workspaceId?: string): Request {
@@ -102,8 +101,15 @@ describe("api-keys route handlers", () => {
     expect(response.status).toBe(400);
   });
 
+  it("POST rejects an unknown workspace with 400", async () => {
+    const response = await POST(
+      postRequest({ name: "A", workspaceId: "missing", scopes: ["*"] }),
+    );
+    expect(response.status).toBe(400);
+  });
+
   it("keeps keys isolated between workspaces", async () => {
-    const other = await createRecord("workspaces", {
+    const other = await repos.workspaces.create({
       name: "Postres",
       slug: "postres",
       ownerId: "u1",

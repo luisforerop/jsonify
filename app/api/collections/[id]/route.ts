@@ -1,7 +1,9 @@
+import { repositories } from "@/lib/server/repositories";
+import type { CollectionPatch } from "@/lib/server/repositories";
 import {
   deleteResponse,
   updateResponse,
-} from "@/lib/server/collection-handlers";
+} from "@/lib/server/resource-handlers";
 import { isCollectionInput } from "@/lib/server/validation";
 
 export async function PATCH(
@@ -9,7 +11,12 @@ export async function PATCH(
   context: RouteContext<"/api/collections/[id]">,
 ): Promise<Response> {
   const { id } = await context.params;
-  return updateResponse("collections", id, request, isCollectionInput);
+  return updateResponse(request, isCollectionInput, ({ input }) => {
+    const patch: CollectionPatch = { name: String(input.name) };
+    if (typeof input.description === "string") patch.description = input.description;
+    if (typeof input.isPublic === "boolean") patch.isPublic = input.isPublic;
+    return repositories.collections.update(id, patch);
+  });
 }
 
 export async function DELETE(
@@ -17,5 +24,5 @@ export async function DELETE(
   context: RouteContext<"/api/collections/[id]">,
 ): Promise<Response> {
   const { id } = await context.params;
-  return deleteResponse("collections", id);
+  return deleteResponse(() => repositories.collections.delete(id));
 }

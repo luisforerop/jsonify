@@ -3,15 +3,18 @@ import { describe, expect, it } from "vitest";
 import type { JsonSchema } from "@/lib/schema-builder";
 import { validatePayload, type StoredSchema } from "@/lib/server/validate-payload";
 
-function storedSchema(schema: JsonSchema, overrides: Partial<StoredSchema> = {}): StoredSchema {
+function storedSchema(
+  schema: JsonSchema,
+  overrides: Partial<StoredSchema> = {},
+): StoredSchema {
   return {
     id: "schema-1",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     name: "Receta",
     collectionId: "c1",
-    workspaceId: "w1",
-    schema,
+    isActive: true,
+    schemaDefinition: schema,
     ...overrides,
   };
 }

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: jsonify-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jsonify
+      POSTGRES_PASSWORD: jsonify
+      POSTGRES_DB: jsonify
+    ports:
+      - "5432:5432"
+    volumes:
+      - jsonify-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jsonify -d jsonify"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  jsonify-pgdata:

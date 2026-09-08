@@ -2,17 +2,26 @@
   "name": "jsonify",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.1",
     "ajv": "^8.20.0",
+    "drizzle-orm": "^0.45.2",
     "next": "16.3.1",
+    "pg": "^8.16.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -20,8 +29,10 @@
     "@tailwindcss/postcss": "^4",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
+    "@types/pg": "^8.15.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.5",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "jsdom": "^29.1.1",

@@ -16,6 +16,22 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Local database
+
+Persistence is Postgres, reached through Drizzle ORM behind the repository
+interfaces in `lib/server/repositories/`. For local development:
+
+```bash
+npm run db:up        # start Postgres via docker-compose
+npm run db:migrate   # apply db/migrations to it
+```
+
+`DATABASE_URL` (in `.env.local`, see `.env.example`) points at that database —
+`postgres://jsonify:jsonify@localhost:5432/jsonify` by default. After changing
+`db/schema.ts`, run `npm run db:generate` to emit a new migration and commit it.
+There is no automatic data migration from the old `data/jsonify.json` file store
+(it held throwaway data); a fresh database starts empty.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

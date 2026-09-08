@@ -1,11 +1,10 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { JsonSchema } from "@/lib/schema-builder";
 import { generateApiKey } from "@/lib/server/api-keys";
-import { createRecord, type StoredRecord } from "@/lib/server/json-store";
+import { resetRepositories, setRepositories } from "@/lib/server/repositories";
+import type { Collection, Workspace } from "@/lib/server/repositories";
+import { makeFakeRepositories } from "@/lib/server/repositories/testing";
 
 import {
   GET as recordsGET,
@@ -14,26 +13,26 @@ import {
 } from "../records/route";
 import { GET, OPTIONS } from "./route";
 
-let dataDir = "";
-let workspace: StoredRecord;
-let collection: StoredRecord;
+let repos: ReturnType<typeof makeFakeRepositories>;
+let workspace: Workspace;
+let collection: Collection;
 let apiKey: string;
 
-const schemaDoc = {
+const schemaDoc: JsonSchema = {
   type: "object",
   properties: { nombre: { type: "string" } },
   required: ["nombre"],
 };
 
 beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(tmpdir(), "jsonify-v1-schema-"));
-  process.env.JSONIFY_DATA_DIR = dataDir;
-  workspace = await createRecord("workspaces", {
+  repos = makeFakeRepositories();
+  setRepositories(repos);
+  workspace = await repos.workspaces.create({
     name: "Cocina",
     slug: "cocina",
     ownerId: "u1",
   });
-  collection = await createRecord("collections", {
+  collection = await repos.collections.create({
     name: "Recetas",
     slug: "recetas",
     workspaceId: workspace.id,
@@ -41,19 +40,17 @@ beforeEach(async () => {
   });
   const generated = generateApiKey();
   apiKey = generated.key;
-  await createRecord("apiKeys", {
+  await repos.apiKeys.create({
     name: "Test key",
     workspaceId: workspace.id,
     keyHash: generated.keyHash,
     keyPrefix: generated.keyPrefix,
     scopes: ["*"],
-    lastUsedAt: null,
   });
 });
 
-afterEach(async () => {
-  delete process.env.JSONIFY_DATA_DIR;
-  await rm(dataDir, { recursive: true, force: true });
+afterEach(() => {
+  resetRepositories();
 });
 
 const ctx = { params: Promise.resolve({ collectionSlug: "recetas" }) };
@@ -65,11 +62,10 @@ function req(headers: Record<string, string>): Request {
 }
 
 async function addSchema(name: string) {
-  return createRecord("schemas", {
+  return repos.schemas.create({
     name,
     collectionId: collection.id,
-    workspaceId: workspace.id,
-    schema: schemaDoc,
+    schemaDefinition: schemaDoc,
   });
 }
 

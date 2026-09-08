@@ -9,7 +9,7 @@ isolated and billed per workspace.
 
 ### Requirement: Create a workspace
 
-The system SHALL let the signed-in Clerk user create a workspace by entering a name. The system SHALL generate a `slug` from the name by lowercasing it and replacing runs of non-alphanumeric characters with single hyphens (e.g. "Clean Fuel" → `clean-fuel`). The workspace SHALL be stored with `ownerId` set to the signed-in user's Clerk user id and a `createdAt` timestamp. Creating a workspace SHALL require a signed-in session.
+The system SHALL let the signed-in Clerk user create a workspace by entering a name. The system SHALL generate a `slug` from the name by lowercasing it and replacing runs of non-alphanumeric characters with single hyphens (e.g. "Clean Fuel" → `clean-fuel`). The workspace SHALL be stored with `ownerId` set to the signed-in user's Clerk user id and a `createdAt` timestamp. Uniqueness of the slug among that owner's workspaces SHALL be enforced atomically by a database unique index rather than by a read-compare-write check. Creating a workspace SHALL also record the creator as a member of the workspace with the `owner` role. Creating a workspace SHALL require a signed-in session.
 
 #### Scenario: Create a workspace with a name
 
@@ -29,7 +29,12 @@ The system SHALL let the signed-in Clerk user create a workspace by entering a n
 #### Scenario: Reject a duplicate slug for the same owner
 
 - **WHEN** the signed-in user creates a workspace whose generated slug matches one they already own
-- **THEN** the system reports the conflict and does not create a second workspace with that slug
+- **THEN** the database unique index rejects the insert, the system reports the conflict, and no second workspace with that slug exists for that owner
+
+#### Scenario: Creator is recorded as owner member
+
+- **WHEN** a workspace is created
+- **THEN** a membership row exists linking the creator to that workspace with the `owner` role
 
 #### Scenario: No active user
 
@@ -77,7 +82,7 @@ workspace as active when it belongs to the active user.
 ### Requirement: Manage workspaces through a persistence boundary
 
 The system SHALL expose create and read operations for workspaces through an
-external client-side hook that persists workspaces in the project-local JSON file
+external client-side hook that persists workspaces in the relational store
 through the server, with asynchronous operations. A created workspace SHALL
 remain available after the browser page is reloaded, including from a different
 browser against the same server.

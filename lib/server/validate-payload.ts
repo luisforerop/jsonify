@@ -1,14 +1,10 @@
 import Ajv2020, { type ValidateFunction } from "ajv/dist/2020";
 
-import type { JsonSchema } from "@/lib/schema-builder";
 import { corsJson } from "@/lib/server/cors";
-import type { StoredRecord } from "@/lib/server/json-store";
+import type { SchemaRow } from "@/lib/server/repositories";
 
-/**
- * A saved schema record: a stored row whose `schema` field holds the JSON Schema
- * document produced by the schema-builder.
- */
-export type StoredSchema = StoredRecord & { schema: JsonSchema };
+/** A saved schema row, whose `schemaDefinition` holds the JSON Schema document. */
+export type StoredSchema = SchemaRow;
 
 export type PayloadValidation =
   | { valid: true }
@@ -31,7 +27,7 @@ function compiledValidator(storedSchema: StoredSchema): ValidateFunction | null 
   if (cached) return cached;
 
   try {
-    const validate = ajv.compile(storedSchema.schema);
+    const validate = ajv.compile(storedSchema.schemaDefinition);
     validators.set(key, validate);
     return validate;
   } catch {

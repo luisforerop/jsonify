@@ -1,26 +1,24 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { hashApiKey } from "@/lib/server/api-keys";
-import { createRecord, type StoredRecord } from "@/lib/server/json-store";
+import { resetRepositories, setRepositories } from "@/lib/server/repositories";
+import type { Collection, Workspace } from "@/lib/server/repositories";
+import { makeFakeRepositories } from "@/lib/server/repositories/testing";
 import { resolvePublicContext } from "@/lib/server/public-api-context";
 
-let dataDir = "";
-let workspace: StoredRecord;
-let collection: StoredRecord;
+let repos: ReturnType<typeof makeFakeRepositories>;
+let workspace: Workspace;
+let collection: Collection;
 
 beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(tmpdir(), "jsonify-ctx-"));
-  process.env.JSONIFY_DATA_DIR = dataDir;
-  workspace = await createRecord("workspaces", {
+  repos = makeFakeRepositories();
+  setRepositories(repos);
+  workspace = await repos.workspaces.create({
     name: "Cocina",
     slug: "cocina",
     ownerId: "u1",
   });
-  collection = await createRecord("collections", {
+  collection = await repos.collections.create({
     name: "Recetas",
     slug: "recetas",
     workspaceId: workspace.id,
@@ -28,9 +26,8 @@ beforeEach(async () => {
   });
 });
 
-afterEach(async () => {
-  delete process.env.JSONIFY_DATA_DIR;
-  await rm(dataDir, { recursive: true, force: true });
+afterEach(() => {
+  resetRepositories();
 });
 
 function request(headers: Record<string, string>): Request {
@@ -40,11 +37,13 @@ function request(headers: Record<string, string>): Request {
 }
 
 async function addSchema(name: string) {
-  return createRecord("schemas", {
+  return repos.schemas.create({
     name,
     collectionId: collection.id,
-    workspaceId: workspace.id,
-    schema: { type: "object", properties: { nombre: { type: "string" } } },
+    schemaDefinition: {
+      type: "object",
+      properties: { nombre: { type: "string" } },
+    },
   });
 }
 
@@ -171,7 +170,7 @@ describe("resolvePublicContext", () => {
 
 describe("resolvePublicContext authorization", () => {
   beforeEach(async () => {
-    await createRecord("collections", {
+    await repos.collections.create({
       name: "Privado",
       slug: "privado",
       workspaceId: workspace.id,
@@ -181,13 +180,12 @@ describe("resolvePublicContext authorization", () => {
 
   async function addApiKey(scopes: string[], forWorkspace = workspace) {
     const raw = `jfy_${Math.random().toString(16).slice(2).padEnd(32, "0")}`;
-    await createRecord("apiKeys", {
+    await repos.apiKeys.create({
       name: "Test key",
       workspaceId: forWorkspace.id,
       keyHash: hashApiKey(raw),
       keyPrefix: raw.slice(0, 12),
       scopes,
-      lastUsedAt: null,
     });
     return raw;
   }
@@ -249,7 +247,7 @@ describe("resolvePublicContext authorization", () => {
   });
 
   it("401s a key that belongs to a different workspace", async () => {
-    const otherWorkspace = await createRecord("workspaces", {
+    const otherWorkspace = await repos.workspaces.create({
       name: "Otro",
       slug: "otro",
       ownerId: "u2",

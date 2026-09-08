@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide a form-based workspace for creating valid, nested JSON Schemas and retaining saved schemas in a project-local JSON file through the server.
+Provide a form-based workspace for creating valid, nested JSON Schemas and retaining saved schemas in the server's relational store.
 
 ## Requirements
 
@@ -54,11 +54,12 @@ The system SHALL expose create, read, update, and delete operations for saved
 JSON Schemas, scoped to the active collection within the active workspace,
 through external client-side hooks. The schema-builder interface SHALL use those
 hooks rather than accessing browser localStorage directly. The hook
-implementation SHALL persist schemas in a project-local JSON file through the
-server, and its create, read, update, and delete operations SHALL be
-asynchronous. A saved schema SHALL remain available after the browser page is
-reloaded, including from a different browser or machine using the same server,
-still associated with its collection and workspace.
+implementation SHALL persist schemas in the relational store through the server,
+and its create, read, update, and delete operations SHALL be asynchronous. Each
+saved schema SHALL carry a name that is unique within its collection, enforced
+atomically by a database unique index. A saved schema SHALL remain available
+after the browser page is reloaded, including from a different browser or machine
+using the same server, still associated with its collection and workspace.
 
 #### Scenario: Save a valid schema
 
@@ -69,6 +70,11 @@ still associated with its collection and workspace.
 
 - **WHEN** the user saves changes to an existing schema
 - **THEN** the interface updates that schema through the persistence hook without creating a duplicate saved entry
+
+#### Scenario: Reject a duplicate schema name in a collection
+
+- **WHEN** the user saves a new schema whose name matches another schema in the same collection
+- **THEN** the database unique index rejects the insert and the system reports the conflict without creating a second schema with that name
 
 #### Scenario: Load saved schemas
 

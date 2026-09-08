@@ -21,5 +21,5 @@ export async function GET(
   if (!resolved.ok) return resolved.response;
 
   // `schema` mode "optional" always resolves a schema on success (or fails).
-  return corsJson({ schema: resolved.schema?.schema ?? null });
+  return corsJson({ schema: resolved.schema?.schemaDefinition ?? null });
 }

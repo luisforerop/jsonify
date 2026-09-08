@@ -17,16 +17,13 @@ export type CollectionInput = {
 export type SavedSchemaInput = {
   name: string;
   schema: JsonSchema;
-  workspaceId: string;
   collectionId: string;
 };
 
 export type RecordInput = {
-  name: string;
   collectionId: string;
   schemaId: string;
-  schemaName: string;
-  values: FormValues;
+  payload: FormValues;
 };
 
 export type ApiKeyInput = {
@@ -51,6 +48,11 @@ export function isWorkspaceInput(value: unknown): value is WorkspaceInput {
   );
 }
 
+/** Update payloads carry just the editable fields. */
+export function isNamedUpdate(value: unknown): value is { name: string } {
+  return isRecord(value) && isNonEmptyString(value.name);
+}
+
 export function isCollectionInput(value: unknown): value is CollectionInput {
   return (
     isRecord(value) &&
@@ -65,7 +67,6 @@ export function isSavedSchemaInput(value: unknown): value is SavedSchemaInput {
   return (
     isRecord(value) &&
     isNonEmptyString(value.name) &&
-    isNonEmptyString(value.workspaceId) &&
     isNonEmptyString(value.collectionId) &&
     isRecord(value.schema)
   );
@@ -74,11 +75,9 @@ export function isSavedSchemaInput(value: unknown): value is SavedSchemaInput {
 export function isRecordInput(value: unknown): value is RecordInput {
   return (
     isRecord(value) &&
-    isNonEmptyString(value.name) &&
     isNonEmptyString(value.collectionId) &&
     isNonEmptyString(value.schemaId) &&
-    isNonEmptyString(value.schemaName) &&
-    isRecord(value.values)
+    isRecord(value.payload)
   );
 }
 

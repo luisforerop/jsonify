@@ -93,7 +93,6 @@ function SchemaBuilderInner({
     const input = {
       name: schemaName.trim(),
       schema,
-      workspaceId: workspace.id,
       collectionId: collection.id,
     };
     const savedSchema = activeSchemaId

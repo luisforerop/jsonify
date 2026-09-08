@@ -1,10 +1,6 @@
 import { corsJson, preflight } from "@/lib/server/cors";
-import {
-  listCollection,
-  removeRecord,
-  updateRecord,
-  type StoredRecord,
-} from "@/lib/server/json-store";
+import { repositories } from "@/lib/server/repositories";
+import type { RecordRow } from "@/lib/server/repositories";
 import { resolvePublicContext } from "@/lib/server/public-api-context";
 import { toPublicRecord } from "@/lib/server/public-record";
 import {
@@ -24,10 +20,14 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 async function findRecord(
   collectionId: string,
   id: string,
-): Promise<StoredRecord | undefined> {
-  return (await listCollection("records")).find(
-    (row) => row.id === id && row.collectionId === collectionId,
-  );
+): Promise<RecordRow | null> {
+  const record = await repositories.records.findById(id);
+  return record && record.collectionId === collectionId ? record : null;
+}
+
+async function schemaName(schemaId: string): Promise<string> {
+  const schema = await repositories.schemas.findById(schemaId);
+  return schema?.name ?? "";
 }
 
 export function OPTIONS(): Response {
@@ -48,7 +48,9 @@ export async function GET(
   const record = await findRecord(resolved.collection.id, id);
   if (!record) return corsJson({ error: "Record not found" }, { status: 404 });
 
-  return corsJson({ data: toPublicRecord(record) });
+  return corsJson({
+    data: toPublicRecord(record, await schemaName(record.schemaId)),
+  });
 }
 
 export async function PUT(
@@ -83,10 +85,12 @@ export async function PUT(
   const validation = validatePayload(schema, body);
   if (!validation.valid) return invalidPayloadResponse(validation);
 
-  const updated = await updateRecord("records", id, { values: body });
+  const updated = await repositories.records.update(id, { payload: body });
   if (!updated) return corsJson({ error: "Record not found" }, { status: 404 });
 
-  return corsJson({ data: toPublicRecord(updated) });
+  return corsJson({
+    data: toPublicRecord(updated, await schemaName(updated.schemaId)),
+  });
 }
 
 export async function DELETE(
@@ -103,6 +107,6 @@ export async function DELETE(
   const record = await findRecord(resolved.collection.id, id);
   if (!record) return corsJson({ error: "Record not found" }, { status: 404 });
 
-  await removeRecord("records", id);
+  await repositories.records.delete(id);
   return corsJson({ success: true });
 }

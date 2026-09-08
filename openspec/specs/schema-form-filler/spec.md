@@ -67,32 +67,16 @@ persistence hooks.
 - **WHEN** the user submits a form while a required field is empty
 - **THEN** the interface reports which fields are missing and does not create a record
 
-### Requirement: Name a record for later identification
-
-The system SHALL let a user give a record a name before it is submitted, and
-SHALL use that name to identify the record in the saved-records list so the user
-can find and load it later.
-
-#### Scenario: Require a name before saving
-
-- **WHEN** the user submits a form without entering a name for the record
-- **THEN** the interface reports that a name is required and does not create or update a record
-
-#### Scenario: Identify saved records by name
-
-- **WHEN** the saved-records list is displayed
-- **THEN** each record shows the name the user gave it instead of only the source schema's name
-
 ### Requirement: Manage records through a persistence boundary
 
 The system SHALL expose create, read, update, and delete operations for records
 through external client-side hooks. The form-filler interface SHALL use those
 hooks rather than accessing browser localStorage directly, and SHALL limit the
 records it displays to those belonging to the active collection. The hook
-implementation SHALL persist records in a project-local JSON file through the
-server, and its create, read, update, and delete operations SHALL be
-asynchronous. A saved record SHALL remain available after the browser page is
-reloaded, including from a different browser or machine using the same server.
+implementation SHALL persist records in the relational store through the server,
+and its create, read, update, and delete operations SHALL be asynchronous. A
+saved record SHALL remain available after the browser page is reloaded, including
+from a different browser or machine using the same server.
 
 #### Scenario: List saved records
 

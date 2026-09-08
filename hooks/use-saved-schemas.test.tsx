@@ -5,7 +5,6 @@ import { installCollectionFetchStub } from "./collection-fetch-stub";
 import { useSavedSchemas } from "./use-saved-schemas";
 
 const schema = { title: "Profile", type: "object" as const, properties: {} };
-const workspaceId = "workspace-1";
 const collectionId = "collection-1";
 
 afterEach(() => {
@@ -26,7 +25,6 @@ describe("useSavedSchemas", () => {
           await result.current.create({
             name: "Profile",
             schema,
-            workspaceId,
             collectionId,
           })
         )?.id ?? "";
@@ -36,14 +34,13 @@ describe("useSavedSchemas", () => {
     expect(calls.at(-1)).toMatchObject({
       method: "POST",
       url: "/api/schemas",
-      body: { name: "Profile", workspaceId, collectionId },
+      body: { name: "Profile", collectionId },
     });
 
     await act(async () => {
       await result.current.update(id, {
         name: "Account",
         schema: { ...schema, title: "Account" },
-        workspaceId,
         collectionId,
       });
     });
@@ -62,7 +59,6 @@ describe("useSavedSchemas", () => {
         id: "a1",
         name: "Profile",
         schema,
-        workspaceId,
         collectionId: "a",
         createdAt: "",
         updatedAt: "",
@@ -71,7 +67,6 @@ describe("useSavedSchemas", () => {
         id: "b1",
         name: "Invoice",
         schema,
-        workspaceId,
         collectionId: "b",
         createdAt: "",
         updatedAt: "",

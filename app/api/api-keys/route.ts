@@ -1,5 +1,6 @@
 import { generateApiKey } from "@/lib/server/api-keys";
-import { createRecord, listCollection, readStore } from "@/lib/server/json-store";
+import { repositories } from "@/lib/server/repositories";
+import type { ApiKey } from "@/lib/server/repositories";
 import { requireUserId, unauthorizedResponse } from "@/lib/server/require-auth";
 import { isApiKeyInput } from "@/lib/server/validation";
 
@@ -15,12 +16,18 @@ async function parseBody(request: Request): Promise<unknown> {
   }
 }
 
-function maskKey(record: Record<string, unknown>): Record<string, unknown> {
-  const masked: Record<string, unknown> = {};
-  for (const [field, value] of Object.entries(record)) {
-    if (field !== "keyHash") masked[field] = value;
-  }
-  return masked;
+/** The stored key metadata minus its hash — the shape the client hook expects. */
+function maskKey(key: ApiKey) {
+  return {
+    id: key.id,
+    name: key.name,
+    workspaceId: key.workspaceId,
+    keyPrefix: key.keyPrefix,
+    scopes: key.scopes,
+    lastUsedAt: key.lastUsedAt,
+    createdAt: key.createdAt,
+    updatedAt: key.updatedAt,
+  };
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -35,9 +42,7 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
-  const keys = (await listCollection("apiKeys")).filter(
-    (key) => key.workspaceId === workspaceId,
-  );
+  const keys = await repositories.apiKeys.listByWorkspace(workspaceId);
   return Response.json(keys.map(maskKey));
 }
 
@@ -50,20 +55,18 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const store = await readStore();
-  const workspace = store.workspaces.find((row) => row.id === body.workspaceId);
+  const workspace = await repositories.workspaces.findById(body.workspaceId);
   if (!workspace) {
     return Response.json({ error: "Workspace not found" }, { status: 400 });
   }
 
   const { key, keyHash, keyPrefix } = generateApiKey();
-  const record = await createRecord("apiKeys", {
+  const record = await repositories.apiKeys.create({
     name: body.name,
     workspaceId: body.workspaceId,
     keyHash,
     keyPrefix,
     scopes: body.scopes,
-    lastUsedAt: null,
   });
 
   return Response.json({ ...maskKey(record), key }, { status: 201 });

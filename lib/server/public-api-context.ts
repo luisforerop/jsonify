@@ -1,16 +1,20 @@
 import { hasScope, hashApiKey, type ApiKeyAction } from "@/lib/server/api-keys";
 import { corsJson } from "@/lib/server/cors";
-import { readStore, updateRecord, type StoredRecord } from "@/lib/server/json-store";
-import type { StoredSchema } from "@/lib/server/validate-payload";
+import { repositories } from "@/lib/server/repositories";
+import type {
+  Collection,
+  SchemaRow,
+  Workspace,
+} from "@/lib/server/repositories";
 
 export type SchemaMode = "none" | "optional" | "required";
 
 export type ResolvedPublicContext = {
   ok: true;
-  workspace: StoredRecord;
-  collection: StoredRecord;
+  workspace: Workspace;
+  collection: Collection;
   /** The selected schema, or `null` when `schema` mode is `"none"`. */
-  schema: StoredSchema | null;
+  schema: SchemaRow | null;
 };
 
 export type PublicContextResult =
@@ -25,7 +29,7 @@ function fail(body: unknown, status: number): { ok: false; response: Response } 
  * Resolve a public `/api/v1` request into its `{ workspace, collection, schema }`
  * context from the `x-workspace-id` / `x-schema` headers and the collection slug
  * in the path. Fails fast with a ready-to-return error `Response` and never
- * mutates the store.
+ * mutates state (beyond a best-effort `last_used_at` touch on the API key).
  *
  * `schema` mode:
  * - `"none"`: skip schema resolution (`schema` is `null`).
@@ -43,15 +47,14 @@ export async function resolvePublicContext(
     return fail({ error: "Missing x-workspace-id header" }, 400);
   }
 
-  const store = await readStore();
-
-  const workspace = store.workspaces.find((row) => row.id === workspaceId);
+  const workspace = await repositories.workspaces.findById(workspaceId);
   if (!workspace) {
     return fail({ error: "Workspace not found" }, 404);
   }
 
-  const collection = store.collections.find(
-    (row) => row.slug === collectionSlug && row.workspaceId === workspace.id,
+  const collection = await repositories.collections.findBySlug(
+    workspace.id,
+    collectionSlug,
   );
   if (!collection) {
     return fail({ error: "Collection not found in this workspace" }, 404);
@@ -66,30 +69,23 @@ export async function resolvePublicContext(
     }
 
     const keyHash = hashApiKey(presentedKey);
-    const apiKey = store.apiKeys.find(
-      (row) => row.keyHash === keyHash && row.workspaceId === workspace.id,
-    );
+    const apiKey = await repositories.apiKeys.findByHash(keyHash, workspace.id);
     if (!apiKey) {
       return fail({ error: "Invalid API key" }, 401);
     }
 
-    const scopes = Array.isArray(apiKey.scopes) ? (apiKey.scopes as string[]) : [];
-    if (!hasScope(scopes, options.action, collectionSlug)) {
+    if (!hasScope(apiKey.scopes, options.action, collectionSlug)) {
       return fail({ error: "API key missing required scope" }, 403);
     }
 
-    void updateRecord("apiKeys", apiKey.id, {
-      lastUsedAt: new Date().toISOString(),
-    });
+    void repositories.apiKeys.touchLastUsed(apiKey.id);
   }
 
   if (options.schema === "none") {
     return { ok: true, workspace, collection, schema: null };
   }
 
-  const schemas = store.schemas.filter(
-    (row) => row.collectionId === collection.id,
-  ) as StoredSchema[];
+  const schemas = await repositories.schemas.listByCollection(collection.id);
 
   if (schemas.length === 0) {
     return fail(

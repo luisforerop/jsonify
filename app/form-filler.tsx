@@ -50,12 +50,10 @@ type FormFillerInnerProps = {
 function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
   const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
   const [schemaName, setSchemaName] = useState<string | null>(null);
-  const [recordName, setRecordName] = useState("");
   const [fields, setFields] = useState<FormField[]>([]);
   const [values, setValues] = useState<FormValues>({});
   const [activeRecordId, setActiveRecordId] = useState<string | null>(null);
   const [missingFields, setMissingFields] = useState<string[]>([]);
-  const [nameMissing, setNameMissing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const { schemas, isLoaded: schemasLoaded } = useSavedSchemas(collection.id);
@@ -68,6 +66,10 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
     remove,
   } = useRecords(collection.id);
 
+  function schemaLabel(schemaId: string): string {
+    return schemas.find((schema) => schema.id === schemaId)?.name ?? "Record";
+  }
+
   function loadSchema(id: string): void {
     const savedSchema = schemas.find((schema) => schema.id === id);
     if (!savedSchema) return;
@@ -75,12 +77,10 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
     const derivedFields = deriveFormFields(savedSchema.schema);
     setActiveSchemaId(savedSchema.id);
     setSchemaName(savedSchema.name);
-    setRecordName("");
     setFields(derivedFields);
     setValues(createInitialValues(derivedFields));
     setActiveRecordId(null);
     setMissingFields([]);
-    setNameMissing(false);
     setNotice(`Loaded ${savedSchema.name}.`);
   }
 
@@ -92,24 +92,21 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
     const derivedFields = savedSchema
       ? deriveFormFields(savedSchema.schema)
       : fields;
+    const label = schemaLabel(record.schemaId);
 
     setActiveSchemaId(record.schemaId);
-    setSchemaName(record.schemaName);
-    setRecordName(record.name);
+    setSchemaName(savedSchema?.name ?? label);
     setFields(derivedFields);
-    setValues(record.values);
+    setValues(record.payload);
     setActiveRecordId(record.id);
     setMissingFields([]);
-    setNameMissing(false);
-    setNotice(`Opened record for ${record.schemaName}.`);
+    setNotice(`Opened record for ${label}.`);
   }
 
   function startNewRecord(): void {
-    setRecordName("");
     setValues(createInitialValues(fields));
     setActiveRecordId(null);
     setMissingFields([]);
-    setNameMissing(false);
     setNotice(null);
   }
 
@@ -129,21 +126,17 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
   }
 
   async function submit(): Promise<void> {
-    if (!activeSchemaId || !schemaName) return;
+    if (!activeSchemaId) return;
 
-    const trimmedName = recordName.trim();
     const validation = validateFormValues(fields, values);
     setMissingFields(validation.missingFields);
-    setNameMissing(!trimmedName);
     setNotice(null);
-    if (!trimmedName || !validation.isValid) return;
+    if (!validation.isValid) return;
 
     const input = {
-      name: trimmedName,
       collectionId: collection.id,
       schemaId: activeSchemaId,
-      schemaName,
-      values,
+      payload: values,
     };
     const savedRecord = activeRecordId
       ? await update(activeRecordId, input)
@@ -151,7 +144,6 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
 
     if (savedRecord) {
       setActiveRecordId(savedRecord.id);
-      setRecordName(savedRecord.name);
       setNotice(activeRecordId ? "Record updated." : "Record saved.");
     }
   }
@@ -181,22 +173,24 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
         />
         <FormPanel
           schemaName={schemaName}
-          entryName={recordName}
           fields={fields}
           values={values}
           missingFields={missingFields}
-          nameMissing={nameMissing}
           persistenceError={error}
           notice={notice}
           isEditingEntry={activeRecordId !== null}
-          onEntryNameChange={(event) => setRecordName(event.target.value)}
           onChange={handleChange}
           onAddItem={handleAddItem}
           onRemoveItem={handleRemoveItem}
           onSubmit={submit}
         />
         <SavedEntriesPanel
-          entries={records}
+          entries={records.map((record) => ({
+            id: record.id,
+            schemaLabel: schemaLabel(record.schemaId),
+            payload: record.payload,
+            updatedAt: record.updatedAt,
+          }))}
           activeEntryId={activeRecordId}
           isLoaded={recordsLoaded}
           onOpenEntry={loadRecord}

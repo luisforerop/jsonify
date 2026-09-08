@@ -1,4 +1,4 @@
-import { getRecord, upsertRecordWithId } from "@/lib/server/json-store";
+import { repositories } from "@/lib/server/repositories";
 
 type ProfileFields = { name: string; email: string };
 
@@ -10,8 +10,8 @@ export async function ensureUserProfile(
   userId: string,
   getProfile: () => Promise<ProfileFields>,
 ): Promise<void> {
-  const existing = await getRecord("users", userId);
+  const existing = await repositories.users.findById(userId);
   if (existing) return;
   const profile = await getProfile();
-  await upsertRecordWithId("users", userId, profile);
+  await repositories.users.upsert(userId, profile);
 }

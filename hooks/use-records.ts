@@ -8,21 +8,18 @@ const API_BASE = "/api/records";
 
 export type SavedRecord = {
   id: string;
-  name: string;
+  workspaceId: string;
   collectionId: string;
   schemaId: string;
-  schemaName: string;
-  values: FormValues;
+  payload: FormValues;
   createdAt: string;
   updatedAt: string;
 };
 
 export type RecordInput = {
-  name: string;
   collectionId: string;
   schemaId: string;
-  schemaName: string;
-  values: FormValues;
+  payload: FormValues;
 };
 
 export type RecordsHook = {

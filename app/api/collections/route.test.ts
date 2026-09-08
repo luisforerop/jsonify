@@ -1,7 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -15,20 +11,20 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 import { auth } from "@clerk/nextjs/server";
 
+import { resetRepositories, setRepositories } from "@/lib/server/repositories";
+import { makeFakeRepositories } from "@/lib/server/repositories/testing";
+
 import { DELETE, PATCH } from "./[id]/route";
 import { GET, POST } from "./route";
 
-let dataDir = "";
-
-beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(tmpdir(), "jsonify-routes-"));
-  process.env.JSONIFY_DATA_DIR = dataDir;
+beforeEach(() => {
+  setRepositories(makeFakeRepositories());
   vi.mocked(auth).mockResolvedValue({ userId: "test-user" } as never);
 });
 
-afterEach(async () => {
-  delete process.env.JSONIFY_DATA_DIR;
-  await rm(dataDir, { recursive: true, force: true });
+afterEach(() => {
+  resetRepositories();
+  vi.restoreAllMocks();
 });
 
 function postRequest(body: unknown): Request {

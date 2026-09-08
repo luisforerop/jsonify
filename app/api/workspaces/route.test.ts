@@ -1,7 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -15,23 +11,23 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 import { auth } from "@clerk/nextjs/server";
 
-import { GET, POST } from "./route";
+import { resetRepositories, setRepositories } from "@/lib/server/repositories";
+import { makeFakeRepositories } from "@/lib/server/repositories/testing";
 
-let dataDir = "";
+import { GET, POST } from "./route";
 
 function signInAs(userId: string | null): void {
   vi.mocked(auth).mockResolvedValue({ userId } as never);
 }
 
-beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(tmpdir(), "jsonify-routes-"));
-  process.env.JSONIFY_DATA_DIR = dataDir;
+beforeEach(() => {
+  setRepositories(makeFakeRepositories());
   signInAs("test-user");
 });
 
-afterEach(async () => {
-  delete process.env.JSONIFY_DATA_DIR;
-  await rm(dataDir, { recursive: true, force: true });
+afterEach(() => {
+  resetRepositories();
+  vi.restoreAllMocks();
 });
 
 function postRequest(body: unknown): Request {
@@ -75,6 +71,16 @@ describe("workspaces route handlers", () => {
     const listed = await (await GET()).json();
     expect(listed).toHaveLength(1);
     expect(listed[0].name).toBe("Mine");
+  });
+
+  it("records the creator as an owner member", async () => {
+    const repos = makeFakeRepositories();
+    setRepositories(repos);
+    const created = await (await POST(postRequest({ name: "Clean Fuel" }))).json();
+    const members = await repos.workspaceMembers.listByWorkspace(created.id);
+    expect(members).toEqual([
+      expect.objectContaining({ userId: "test-user", role: "owner" }),
+    ]);
   });
 
   it("rejects requests with no signed-in user", async () => {

@@ -1,7 +1,8 @@
+import { repositories } from "@/lib/server/repositories";
 import {
   deleteResponse,
   updateResponse,
-} from "@/lib/server/collection-handlers";
+} from "@/lib/server/resource-handlers";
 import { isRecordInput } from "@/lib/server/validation";
 
 export async function PATCH(
@@ -9,7 +10,12 @@ export async function PATCH(
   context: RouteContext<"/api/records/[id]">,
 ): Promise<Response> {
   const { id } = await context.params;
-  return updateResponse("records", id, request, isRecordInput);
+  return updateResponse(request, isRecordInput, ({ input }) =>
+    repositories.records.update(id, {
+      schemaId: String(input.schemaId),
+      payload: input.payload as Record<string, unknown>,
+    }),
+  );
 }
 
 export async function DELETE(
@@ -17,5 +23,5 @@ export async function DELETE(
   context: RouteContext<"/api/records/[id]">,
 ): Promise<Response> {
   const { id } = await context.params;
-  return deleteResponse("records", id);
+  return deleteResponse(() => repositories.records.delete(id));
 }

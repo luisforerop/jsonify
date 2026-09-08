@@ -1,69 +1,69 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { JsonSchema } from "@/lib/schema-builder";
 import { generateApiKey } from "@/lib/server/api-keys";
-import { createRecord, type StoredRecord } from "@/lib/server/json-store";
+import { resetRepositories, setRepositories } from "@/lib/server/repositories";
+import type {
+  Collection,
+  RecordRow,
+  SchemaRow,
+  Workspace,
+} from "@/lib/server/repositories";
+import { makeFakeRepositories } from "@/lib/server/repositories/testing";
 
 import { DELETE, GET, PUT } from "./route";
 
-let dataDir = "";
-let workspace: StoredRecord;
-let collection: StoredRecord;
-let schema: StoredRecord;
-let record: StoredRecord;
+let repos: ReturnType<typeof makeFakeRepositories>;
+let workspace: Workspace;
+let collection: Collection;
+let schema: SchemaRow;
+let record: RecordRow;
 let apiKey: string;
 
-const schemaDoc = {
+const schemaDoc: JsonSchema = {
   type: "object",
   properties: { nombre: { type: "string" }, porciones: { type: "integer" } },
   required: ["nombre"],
 };
 
 beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(tmpdir(), "jsonify-v1-record-"));
-  process.env.JSONIFY_DATA_DIR = dataDir;
-  workspace = await createRecord("workspaces", {
+  repos = makeFakeRepositories();
+  setRepositories(repos);
+  workspace = await repos.workspaces.create({
     name: "Cocina",
     slug: "cocina",
     ownerId: "u1",
   });
-  collection = await createRecord("collections", {
+  collection = await repos.collections.create({
     name: "Recetas",
     slug: "recetas",
     workspaceId: workspace.id,
     isPublic: true,
   });
-  schema = await createRecord("schemas", {
+  schema = await repos.schemas.create({
     name: "Receta",
     collectionId: collection.id,
-    workspaceId: workspace.id,
-    schema: schemaDoc,
+    schemaDefinition: schemaDoc,
   });
-  record = await createRecord("records", {
-    name: "Arepa",
+  record = await repos.records.create({
+    workspaceId: workspace.id,
     collectionId: collection.id,
     schemaId: schema.id,
-    schemaName: "Receta",
-    values: { nombre: "Arepa", porciones: 2 },
+    payload: { nombre: "Arepa", porciones: 2 },
   });
   const generated = generateApiKey();
   apiKey = generated.key;
-  await createRecord("apiKeys", {
+  await repos.apiKeys.create({
     name: "Test key",
     workspaceId: workspace.id,
     keyHash: generated.keyHash,
     keyPrefix: generated.keyPrefix,
     scopes: ["*"],
-    lastUsedAt: null,
   });
 });
 
-afterEach(async () => {
-  delete process.env.JSONIFY_DATA_DIR;
-  await rm(dataDir, { recursive: true, force: true });
+afterEach(() => {
+  resetRepositories();
 });
 
 function ctx(id: string) {
@@ -137,17 +137,16 @@ describe("v1 single-record route", () => {
   });
 
   it("returns 404 for a record id that belongs to another collection", async () => {
-    const otherCollection = await createRecord("collections", {
+    const otherCollection = await repos.collections.create({
       name: "Postres",
       slug: "postres",
       workspaceId: workspace.id,
     });
-    const otherRecord = await createRecord("records", {
-      name: "Flan",
+    const otherRecord = await repos.records.create({
+      workspaceId: workspace.id,
       collectionId: otherCollection.id,
       schemaId: schema.id,
-      schemaName: "Receta",
-      values: { nombre: "Flan" },
+      payload: { nombre: "Flan" },
     });
 
     const response = await GET(req(), ctx(otherRecord.id));
@@ -155,18 +154,17 @@ describe("v1 single-record route", () => {
   });
 
   it("GET without a key is 401 for a private collection", async () => {
-    const privateCollection = await createRecord("collections", {
+    const privateCollection = await repos.collections.create({
       name: "Privado",
       slug: "privado",
       workspaceId: workspace.id,
       isPublic: false,
     });
-    const privateRecord = await createRecord("records", {
-      name: "Secreto",
+    const privateRecord = await repos.records.create({
+      workspaceId: workspace.id,
       collectionId: privateCollection.id,
       schemaId: schema.id,
-      schemaName: "Receta",
-      values: { nombre: "Secreto" },
+      payload: { nombre: "Secreto" },
     });
     const request = new Request("http://localhost/api/v1/collections/privado/records/x", {
       headers: { "x-workspace-id": workspace.id },
@@ -179,13 +177,12 @@ describe("v1 single-record route", () => {
 
   it("DELETE with a key that lacks the delete scope is 403", async () => {
     const generated = generateApiKey();
-    await createRecord("apiKeys", {
+    await repos.apiKeys.create({
       name: "Read only",
       workspaceId: workspace.id,
       keyHash: generated.keyHash,
       keyPrefix: generated.keyPrefix,
       scopes: ["read:recetas"],
-      lastUsedAt: null,
     });
     const response = await DELETE(
       req({

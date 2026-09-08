@@ -10,8 +10,8 @@ export type SavedSchema = {
   id: string;
   name: string;
   schema: JsonSchema;
-  workspaceId: string;
   collectionId: string;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -19,7 +19,6 @@ export type SavedSchema = {
 export type SavedSchemaInput = {
   name: string;
   schema: JsonSchema;
-  workspaceId: string;
   collectionId: string;
 };
 
