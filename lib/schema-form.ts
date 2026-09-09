@@ -139,6 +139,97 @@ function isEmptyValue(field: FormField, value: FormValue | undefined): boolean {
   return value === undefined || value === null || value === "";
 }
 
+export type FormValuesImportResult =
+  | { ok: true; values: FormValues }
+  | { ok: false; error: string };
+
+export function formValuesFromJson(
+  input: string,
+  fields: FormField[],
+): FormValuesImportResult {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(input);
+  } catch {
+    return { ok: false, error: "Enter valid JSON to fill the form." };
+  }
+
+  if (!isPlainObject(parsed)) {
+    return {
+      ok: false,
+      error: 'Paste a JSON object, for example { "name": "value" }.',
+    };
+  }
+
+  return { ok: true, values: conformValues(fields, parsed) };
+}
+
+function conformValues(
+  fields: FormField[],
+  raw: Record<string, unknown>,
+): FormValues {
+  return Object.fromEntries(
+    fields.map((field) => [field.name, conformValue(field, raw[field.name])]),
+  );
+}
+
+function conformValue(field: FormField, raw: unknown): FormValue {
+  if (field.type === "null") {
+    return null;
+  }
+
+  if (raw === undefined || raw === null) {
+    return createInitialValue(field);
+  }
+
+  if (field.type === "object") {
+    return isPlainObject(raw)
+      ? conformValues(field.properties ?? [], raw)
+      : createInitialValues(field.properties ?? []);
+  }
+
+  if (field.type === "array") {
+    if (!Array.isArray(raw) || !field.items) {
+      return [];
+    }
+    const itemField = field.items;
+    return raw.map((element) => conformValue(itemField, element));
+  }
+
+  if (field.type === "boolean") {
+    return typeof raw === "boolean" ? raw : false;
+  }
+
+  if (field.type === "number" || field.type === "integer") {
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      return raw;
+    }
+    if (
+      typeof raw === "string" &&
+      raw.trim() !== "" &&
+      Number.isFinite(Number(raw))
+    ) {
+      return Number(raw);
+    }
+    return "";
+  }
+
+  if (typeof raw === "string") {
+    return raw;
+  }
+
+  if (typeof raw === "number" || typeof raw === "boolean") {
+    return String(raw);
+  }
+
+  return "";
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 export function getValueAtPath(
   values: FormValues,
   path: FormPathSegment[],

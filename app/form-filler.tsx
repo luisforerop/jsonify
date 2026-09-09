@@ -4,6 +4,10 @@ import { useState } from "react";
 
 import { ScopedTool } from "@/app/components/collections/scoped-tool";
 import { FormFillerHeader } from "@/app/components/form-filler/workspace-header";
+import {
+  FormJsonImportPanel,
+  type PublishResult,
+} from "@/app/components/form-filler/json-import-panel";
 import { FormPanel } from "@/app/components/form-filler/form-panel";
 import { SavedEntriesPanel } from "@/app/components/form-filler/saved-entries-panel";
 import { SchemaPickerPanel } from "@/app/components/form-filler/schema-picker-panel";
@@ -55,6 +59,7 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
   const [activeRecordId, setActiveRecordId] = useState<string | null>(null);
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [mode, setMode] = useState<"form" | "import">("form");
 
   const { schemas, isLoaded: schemasLoaded } = useSavedSchemas(collection.id);
   const {
@@ -81,6 +86,7 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
     setValues(createInitialValues(derivedFields));
     setActiveRecordId(null);
     setMissingFields([]);
+    setMode("form");
     setNotice(`Loaded ${savedSchema.name}.`);
   }
 
@@ -100,6 +106,7 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
     setValues(record.payload);
     setActiveRecordId(record.id);
     setMissingFields([]);
+    setMode("form");
     setNotice(`Opened record for ${label}.`);
   }
 
@@ -107,7 +114,35 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
     setValues(createInitialValues(fields));
     setActiveRecordId(null);
     setMissingFields([]);
+    setMode("form");
     setNotice(null);
+  }
+
+  function openInFormFromJson(nextValues: FormValues): void {
+    setValues(nextValues);
+    setActiveRecordId(null);
+    setMissingFields([]);
+    setMode("form");
+    setNotice("Form populated from JSON.");
+  }
+
+  async function publishFromJson(
+    nextValues: FormValues,
+  ): Promise<PublishResult> {
+    if (!activeSchemaId) return { status: "error" };
+
+    const validation = validateFormValues(fields, nextValues);
+    if (!validation.isValid) {
+      return { status: "invalid", missingFields: validation.missingFields };
+    }
+
+    const savedRecord = await create({
+      collectionId: collection.id,
+      schemaId: activeSchemaId,
+      payload: nextValues,
+    });
+
+    return savedRecord ? { status: "saved" } : { status: "error" };
   }
 
   function handleChange(path: FormPathSegment[], value: FormValue): void {
@@ -171,19 +206,29 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
           isLoaded={schemasLoaded}
           onSelectSchema={loadSchema}
         />
-        <FormPanel
-          schemaName={schemaName}
-          fields={fields}
-          values={values}
-          missingFields={missingFields}
-          persistenceError={error}
-          notice={notice}
-          isEditingEntry={activeRecordId !== null}
-          onChange={handleChange}
-          onAddItem={handleAddItem}
-          onRemoveItem={handleRemoveItem}
-          onSubmit={submit}
-        />
+        {mode === "import" ? (
+          <FormJsonImportPanel
+            fields={fields}
+            onOpenInForm={openInFormFromJson}
+            onPublish={publishFromJson}
+            onBack={() => setMode("form")}
+          />
+        ) : (
+          <FormPanel
+            schemaName={schemaName}
+            fields={fields}
+            values={values}
+            missingFields={missingFields}
+            persistenceError={error}
+            notice={notice}
+            isEditingEntry={activeRecordId !== null}
+            onChange={handleChange}
+            onAddItem={handleAddItem}
+            onRemoveItem={handleRemoveItem}
+            onSubmit={submit}
+            onEnterImport={() => setMode("import")}
+          />
+        )}
         <SavedEntriesPanel
           entries={records.map((record) => ({
             id: record.id,

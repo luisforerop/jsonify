@@ -19,6 +19,7 @@ type FormPanelProps = {
   onAddItem: (path: FormPathSegment[], defaultValue: FormValue) => void;
   onRemoveItem: (path: FormPathSegment[], index: number) => void;
   onSubmit: () => void;
+  onEnterImport: () => void;
 };
 
 export function FormPanel({
@@ -33,7 +34,10 @@ export function FormPanel({
   onAddItem,
   onRemoveItem,
   onSubmit,
+  onEnterImport,
 }: FormPanelProps) {
+  const canImport = schemaName !== null && fields.length > 0;
+
   return (
     <section className="builder-panel" aria-labelledby="form-filler-title">
       <div className="builder-heading">
@@ -43,7 +47,18 @@ export function FormPanel({
             {schemaName ?? "Load a schema to begin"}
           </h1>
         </div>
-        {isEditingEntry && <span className="root-type">editing entry</span>}
+        <div className="builder-heading-actions">
+          {isEditingEntry && <span className="root-type">editing entry</span>}
+          {canImport && (
+            <button
+              className="button button-outline"
+              type="button"
+              onClick={onEnterImport}
+            >
+              Fill from JSON
+            </button>
+          )}
+        </div>
       </div>
 
       {!schemaName ? (
