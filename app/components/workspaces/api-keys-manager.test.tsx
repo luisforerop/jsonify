@@ -12,7 +12,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function stubFetch(collections: { id: string; name: string; slug: string }[] = []) {
+function stubFetch(
+  collections: { id: string; name: string; slug: string; workspaceId?: string }[] = [],
+) {
+  const withWorkspace = collections.map((collection) => ({
+    workspaceId,
+    ...collection,
+  }));
   const postCalls: { name: string; workspaceId: string; scopes: string[] }[] = [];
 
   vi.stubGlobal(
@@ -22,7 +28,7 @@ function stubFetch(collections: { id: string; name: string; slug: string }[] = [
       const method = (init?.method ?? "GET").toUpperCase();
 
       if (method === "GET" && url === "/api/collections") {
-        return new Response(JSON.stringify(collections), { status: 200 });
+        return new Response(JSON.stringify(withWorkspace), { status: 200 });
       }
 
       if (method === "GET") {

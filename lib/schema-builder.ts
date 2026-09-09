@@ -150,6 +150,68 @@ export function propertiesFromJsonSchema(
   );
 }
 
+export type JsonImportResult =
+  | { ok: true; properties: BuilderNode[] }
+  | { ok: false; error: string };
+
+export function schemaFromSampleJson(
+  input: string,
+  createId: () => string,
+): JsonImportResult {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(input);
+  } catch {
+    return { ok: false, error: "Enter valid JSON to generate a schema." };
+  }
+
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {
+      ok: false,
+      error: 'Paste a JSON object, for example { "name": "value" }.',
+    };
+  }
+
+  const schema = inferJsonSchema(parsed);
+  return { ok: true, properties: propertiesFromJsonSchema(schema, createId) };
+}
+
+function inferJsonSchema(value: unknown): JsonSchema {
+  if (value === null) {
+    return { type: "null" };
+  }
+
+  if (Array.isArray(value)) {
+    return {
+      type: "array",
+      items: value.length > 0 ? inferJsonSchema(value[0]) : { type: "string" },
+    };
+  }
+
+  if (typeof value === "object") {
+    return {
+      type: "object",
+      properties: Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([key, member]) => [
+          key,
+          inferJsonSchema(member),
+        ]),
+      ),
+    };
+  }
+
+  if (typeof value === "number") {
+    return { type: Number.isInteger(value) ? "integer" : "number" };
+  }
+
+  if (typeof value === "boolean") {
+    return { type: "boolean" };
+  }
+
+  return { type: "string" };
+}
+
 export function validateSchema(
   title: string,
   properties: BuilderNode[],

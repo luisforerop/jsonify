@@ -8,6 +8,8 @@ type WorkspaceHeaderProps = {
   workspace: Workspace;
   collection: Collection;
   isEditing: boolean;
+  mode: "editor" | "import";
+  onToggleMode: () => void;
   onNewSchema: () => void;
   onSaveSchema: () => void;
 };
@@ -16,6 +18,8 @@ export function WorkspaceHeader({
   workspace,
   collection,
   isEditing,
+  mode,
+  onToggleMode,
   onNewSchema,
   onSaveSchema,
 }: WorkspaceHeaderProps) {
@@ -43,6 +47,13 @@ export function WorkspaceHeader({
         >
           Fill a form
         </Link>
+        <button
+          className="button button-secondary"
+          type="button"
+          onClick={onToggleMode}
+        >
+          {mode === "import" ? "Back to editor" : "From JSON"}
+        </button>
         <button
           className="button button-secondary"
           type="button"

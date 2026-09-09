@@ -22,12 +22,23 @@ export function CollectionView({
   collectionSlug,
 }: CollectionViewProps) {
   const router = useRouter();
-  const { status, workspace, collection } = useScopedCollection(
-    workspaceSlug,
-    collectionSlug,
-  );
-  const { update: updateCollection, remove: removeCollection } =
-    useCollections(workspace?.id);
+  const {
+    status,
+    workspace,
+    collection: scopedCollection,
+  } = useScopedCollection(workspaceSlug, collectionSlug);
+  const {
+    collections,
+    update: updateCollection,
+    remove: removeCollection,
+  } = useCollections(workspace?.id);
+  // Derive the collection from the same hook instance that `update`/`remove`
+  // mutate, so toggling visibility or renaming re-renders without a reload.
+  // `useCollections` keeps per-instance state, so the copy inside
+  // `useScopedCollection` would otherwise stay stale until the next fetch.
+  const collection =
+    collections.find((candidate) => candidate.slug === collectionSlug) ??
+    scopedCollection;
   const { schemas, remove: removeSchema } = useSavedSchemas(collection?.id);
   const { records, remove: removeRecord } = useRecords(collection?.id);
   const [showApiExample, setShowApiExample] = useState(false);

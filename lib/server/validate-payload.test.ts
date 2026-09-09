@@ -123,7 +123,12 @@ describe("validatePayload", () => {
 
   it("flags a stored schema that cannot be compiled", () => {
     const result = validatePayload(
-      storedSchema({ type: "not-a-real-type" } as unknown as JsonSchema),
+      // Distinct id/updatedAt so this does not hit the compiled-validator
+      // cache populated by the valid-schema cases above.
+      storedSchema({ type: "not-a-real-type" } as unknown as JsonSchema, {
+        id: "broken-schema",
+        updatedAt: "2026-02-02T00:00:00.000Z",
+      }),
       { anything: true },
     );
     expect(result).toMatchObject({ valid: false, reason: "uncompilable-schema" });

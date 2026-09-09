@@ -3,6 +3,7 @@
 import { useDeferredValue, useState } from "react";
 
 import { ScopedTool } from "@/app/components/collections/scoped-tool";
+import { JsonImportPanel } from "@/app/components/schema-builder/json-import-panel";
 import { SavedSchemasPanel } from "@/app/components/schema-builder/saved-schemas-panel";
 import { SchemaEditor } from "@/app/components/schema-builder/schema-editor";
 import { SchemaPreview } from "@/app/components/schema-builder/schema-preview";
@@ -60,6 +61,7 @@ function SchemaBuilderInner({
   const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [mode, setMode] = useState<"editor" | "import">("editor");
   const { schemas, error, isLoaded, create, update, remove } = useSavedSchemas(
     collection.id,
   );
@@ -110,6 +112,7 @@ function SchemaBuilderInner({
     setActiveSchemaId(null);
     setValidationErrors([]);
     setNotice(null);
+    setMode("editor");
   }
 
   function openSchema(id: string): void {
@@ -120,6 +123,14 @@ function SchemaBuilderInner({
     setActiveSchemaId(savedSchema.id);
     setValidationErrors([]);
     setNotice(`Opened ${savedSchema.name}.`);
+    setMode("editor");
+  }
+
+  function generateFromJson(nextProperties: BuilderNode[]): void {
+    setProperties(nextProperties);
+    setValidationErrors([]);
+    setNotice("Schema generated from JSON. Review and edit before saving.");
+    setMode("editor");
   }
 
   async function deleteSchema(id: string): Promise<void> {
@@ -135,6 +146,10 @@ function SchemaBuilderInner({
         workspace={workspace}
         collection={collection}
         isEditing={activeSchemaId !== null}
+        mode={mode}
+        onToggleMode={() =>
+          setMode((current) => (current === "import" ? "editor" : "import"))
+        }
         onNewSchema={startNewSchema}
         onSaveSchema={saveSchema}
       />
@@ -147,50 +162,56 @@ function SchemaBuilderInner({
           onOpenSchema={openSchema}
           onDeleteSchema={deleteSchema}
         />
-        <SchemaEditor
-          schemaName={schemaName}
-          properties={properties}
-          validationErrors={validationErrors}
-          persistenceError={error}
-          notice={notice}
-          onSchemaNameChange={(event) => setSchemaName(event.target.value)}
-          onAddProperty={() => addProperty()}
-          onAddChild={addProperty}
-          onNameChange={(id, name) =>
-            setProperties((current) =>
-              updateNode(current, id, (node) => ({ ...node, name })),
-            )
-          }
-          onTypeChange={(id, type) =>
-            setProperties((current) =>
-              updateNode(current, id, (node) =>
-                changeNodeType(node, type, createId),
-              ),
-            )
-          }
-          onRequiredChange={(id, required) =>
-            setProperties((current) =>
-              updateNode(current, id, (node) => ({ ...node, required })),
-            )
-          }
-          onItemTypeChange={(id, type) =>
-            setProperties((current) =>
-              updateNode(current, id, (node) =>
-                node.type === "array"
-                  ? {
-                      ...node,
-                      items: changeNodeType(
-                        node.items ?? createBuilderNode(createId(), "items"),
-                        type,
-                        createId,
-                      ),
-                    }
-                  : node,
-              ),
-            )
-          }
-          onRemove={(id) => setProperties((current) => removeNode(current, id))}
-        />
+        {mode === "import" ? (
+          <JsonImportPanel createId={createId} onGenerated={generateFromJson} />
+        ) : (
+          <SchemaEditor
+            schemaName={schemaName}
+            properties={properties}
+            validationErrors={validationErrors}
+            persistenceError={error}
+            notice={notice}
+            onSchemaNameChange={(event) => setSchemaName(event.target.value)}
+            onAddProperty={() => addProperty()}
+            onAddChild={addProperty}
+            onNameChange={(id, name) =>
+              setProperties((current) =>
+                updateNode(current, id, (node) => ({ ...node, name })),
+              )
+            }
+            onTypeChange={(id, type) =>
+              setProperties((current) =>
+                updateNode(current, id, (node) =>
+                  changeNodeType(node, type, createId),
+                ),
+              )
+            }
+            onRequiredChange={(id, required) =>
+              setProperties((current) =>
+                updateNode(current, id, (node) => ({ ...node, required })),
+              )
+            }
+            onItemTypeChange={(id, type) =>
+              setProperties((current) =>
+                updateNode(current, id, (node) =>
+                  node.type === "array"
+                    ? {
+                        ...node,
+                        items: changeNodeType(
+                          node.items ?? createBuilderNode(createId(), "items"),
+                          type,
+                          createId,
+                        ),
+                      }
+                    : node,
+                ),
+              )
+            }
+            onRemove={(id) =>
+              setProperties((current) => removeNode(current, id))
+            }
+          />
+        )}
         <SchemaPreview schema={preview} />
       </div>
     </main>

@@ -356,6 +356,37 @@ select:focus {
   margin-top: 5px;
   font-size: 13px;
 }
+.json-import-hint {
+  margin: 24px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.json-import-field {
+  display: block;
+  margin-top: 14px;
+}
+.json-import-field textarea {
+  width: 100%;
+  min-height: 260px;
+  resize: vertical;
+  border: 1px solid #bccbc1;
+  border-radius: 5px;
+  outline: none;
+  background: #152c2a;
+  padding: 14px;
+  color: #d9f2dc;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.json-import-field textarea:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgb(11 109 104 / 14%);
+}
+.json-import-field + .button {
+  margin-top: 14px;
+}
 .property-collection {
   display: grid;
   gap: 10px;
