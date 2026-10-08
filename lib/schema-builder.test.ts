@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  changeNodeType,
+  createBuilderNode,
   createJsonSchema,
+  propertiesFromJsonSchema,
   schemaFromSampleJson,
   validateSchema,
   type BuilderNode,
@@ -179,5 +182,95 @@ describe("schemaFromSampleJson", () => {
         error: message,
       });
     }
+  });
+});
+
+describe("enum properties", () => {
+  const enumNode = (overrides: Partial<BuilderNode> = {}): BuilderNode => ({
+    id: "e",
+    name: "status",
+    type: "enum",
+    required: false,
+    enumValues: ["draft", "published"],
+    ...overrides,
+  });
+
+  it("emits a string schema constrained by enum", () => {
+    const schema = createJsonSchema("Post", [enumNode()]);
+
+    expect(schema.properties?.status).toEqual({
+      type: "string",
+      enum: ["draft", "published"],
+    });
+  });
+
+  it("emits enum array items", () => {
+    const array: BuilderNode = {
+      id: "a",
+      name: "states",
+      type: "array",
+      required: false,
+      items: enumNode({ name: "items", enumValues: ["a", "b"] }),
+    };
+
+    expect(createJsonSchema("Post", [array]).properties?.states).toEqual({
+      type: "array",
+      items: { type: "string", enum: ["a", "b"] },
+    });
+  });
+
+  it("starts empty when changing to enum and drops options when changing away", () => {
+    const toEnum = changeNodeType(createBuilderNode("n", "x"), "enum", () => "i");
+    expect(toEnum.enumValues).toEqual([]);
+
+    const away = changeNodeType(enumNode(), "number", () => "i");
+    expect(away.enumValues).toBeUndefined();
+    expect(createJsonSchema("T", [away]).properties?.status).toEqual({
+      type: "number",
+    });
+  });
+
+  it("restores an enum node from a saved schema", () => {
+    const schema = createJsonSchema("Post", [enumNode()]);
+    const [node] = propertiesFromJsonSchema(schema, sequentialId());
+
+    expect(node).toMatchObject({
+      name: "status",
+      type: "enum",
+      enumValues: ["draft", "published"],
+    });
+  });
+
+  it("does not infer enums from sample JSON", () => {
+    const properties = importProperties('{ "status": "draft" }');
+
+    expect(findProperty(properties, "status").type).toBe("string");
+  });
+
+  it("rejects missing, blank, and duplicate options", () => {
+    expect(validateSchema("T", [enumNode({ enumValues: [] })]).errors).toEqual([
+      "status needs at least one option.",
+    ]);
+    expect(validateSchema("T", [enumNode({ enumValues: ["a", " "] })]).errors).toEqual([
+      "status cannot have blank options.",
+    ]);
+    expect(validateSchema("T", [enumNode({ enumValues: ["a", "a "] })]).errors).toEqual([
+      "status cannot have duplicate options.",
+    ]);
+    expect(validateSchema("T", [enumNode()]).isValid).toBe(true);
+  });
+
+  it("validates enum array items", () => {
+    const array: BuilderNode = {
+      id: "a",
+      name: "states",
+      type: "array",
+      required: false,
+      items: enumNode({ name: "items", enumValues: [] }),
+    };
+
+    expect(validateSchema("T", [array]).errors).toEqual([
+      "states items needs at least one option.",
+    ]);
   });
 });

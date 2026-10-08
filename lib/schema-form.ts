@@ -6,8 +6,9 @@ import {
 
 export type FormField = {
   name: string;
-  type: JsonSchemaType;
+  type: JsonSchemaType | "enum";
   required: boolean;
+  options?: string[];
   properties?: FormField[];
   items?: FormField;
 };
@@ -40,12 +41,24 @@ function formFieldFromJsonSchema(
   schema: JsonSchema,
   requiredNames: string[],
 ): FormField {
-  const type = JSON_SCHEMA_TYPES.includes(schema.type) ? schema.type : "string";
+  const isEnum =
+    schema.type === "string" &&
+    Array.isArray(schema.enum) &&
+    schema.enum.every((value) => typeof value === "string");
+  const type: FormField["type"] = isEnum
+    ? "enum"
+    : JSON_SCHEMA_TYPES.includes(schema.type)
+      ? schema.type
+      : "string";
   const field: FormField = {
     name,
     type,
     required: requiredNames.includes(name),
   };
+
+  if (isEnum) {
+    field.options = [...(schema.enum ?? [])];
+  }
 
   if (type === "object") {
     field.properties = deriveFormFields(schema);
@@ -197,6 +210,12 @@ function conformValue(field: FormField, raw: unknown): FormValue {
     return raw.map((element) => conformValue(itemField, element));
   }
 
+  if (field.type === "enum") {
+    return typeof raw === "string" && (field.options ?? []).includes(raw)
+      ? raw
+      : "";
+  }
+
   if (field.type === "boolean") {
     return typeof raw === "boolean" ? raw : false;
   }
@@ -224,6 +243,38 @@ function conformValue(field: FormField, raw: unknown): FormValue {
   }
 
   return "";
+}
+
+/** Blank enum values that are no longer among the field's options (e.g. a saved record from before an option was removed). */
+export function clearStaleEnumValues(
+  fields: FormField[],
+  values: FormValues,
+): FormValues {
+  return Object.fromEntries(
+    Object.entries(values).map(([key, value]) => {
+      const field = fields.find((candidate) => candidate.name === key);
+      return [key, field ? clearStaleEnumValue(field, value) : value];
+    }),
+  );
+}
+
+function clearStaleEnumValue(field: FormField, value: FormValue): FormValue {
+  if (field.type === "enum") {
+    return typeof value === "string" && (field.options ?? []).includes(value)
+      ? value
+      : "";
+  }
+
+  if (field.type === "object" && isPlainObject(value)) {
+    return clearStaleEnumValues(field.properties ?? [], value as FormValues);
+  }
+
+  if (field.type === "array" && field.items && Array.isArray(value)) {
+    const itemField = field.items;
+    return value.map((item) => clearStaleEnumValue(itemField, item));
+  }
+
+  return value;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

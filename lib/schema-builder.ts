@@ -10,11 +10,17 @@ export const JSON_SCHEMA_TYPES = [
 
 export type JsonSchemaType = (typeof JSON_SCHEMA_TYPES)[number];
 
+/** Types selectable in the builder: JSON Schema types plus the `enum` pseudo-type. */
+export const BUILDER_TYPES = [...JSON_SCHEMA_TYPES, "enum"] as const;
+
+export type BuilderNodeType = (typeof BUILDER_TYPES)[number];
+
 export type BuilderNode = {
   id: string;
   name: string;
-  type: JsonSchemaType;
+  type: BuilderNodeType;
   required: boolean;
+  enumValues?: string[];
   properties?: BuilderNode[];
   items?: BuilderNode;
 };
@@ -23,6 +29,7 @@ export type JsonSchema = {
   $schema?: string;
   title?: string;
   type: JsonSchemaType;
+  enum?: string[];
   properties?: Record<string, JsonSchema>;
   required?: string[];
   items?: JsonSchema;
@@ -39,13 +46,24 @@ export function createBuilderNode(id: string, name = ""): BuilderNode {
 
 export function changeNodeType(
   node: BuilderNode,
-  type: JsonSchemaType,
+  type: BuilderNodeType,
   createId: () => string,
 ): BuilderNode {
+  if (type === "enum") {
+    return {
+      ...node,
+      type,
+      enumValues: node.enumValues ?? [],
+      properties: undefined,
+      items: undefined,
+    };
+  }
+
   if (type === "object") {
     return {
       ...node,
       type,
+      enumValues: undefined,
       properties: node.properties ?? [],
       items: undefined,
     };
@@ -55,12 +73,19 @@ export function changeNodeType(
     return {
       ...node,
       type,
+      enumValues: undefined,
       properties: undefined,
       items: node.items ?? createBuilderNode(createId(), "items"),
     };
   }
 
-  return { ...node, type, properties: undefined, items: undefined };
+  return {
+    ...node,
+    type,
+    enumValues: undefined,
+    properties: undefined,
+    items: undefined,
+  };
 }
 
 export function updateNode(
@@ -97,6 +122,13 @@ export function removeNode(
 }
 
 export function toJsonSchema(node: BuilderNode): JsonSchema {
+  if (node.type === "enum") {
+    return {
+      type: "string",
+      enum: (node.enumValues ?? []).map((value) => value.trim()),
+    };
+  }
+
   if (node.type === "object") {
     return createObjectSchema(node.properties ?? []);
   }
@@ -250,6 +282,14 @@ function validatePropertyLevel(
       validatePropertyLevel(property.properties ?? [], name || label, errors);
     }
 
+    if (property.type === "enum") {
+      validateEnumOptions(property, name || label, errors);
+    }
+
+    if (property.type === "array" && property.items?.type === "enum") {
+      validateEnumOptions(property.items, `${name || label} items`, errors);
+    }
+
     if (property.type === "array" && property.items?.type === "object") {
       validatePropertyLevel(
         property.items.properties ?? [],
@@ -260,19 +300,52 @@ function validatePropertyLevel(
   });
 }
 
+function validateEnumOptions(
+  node: BuilderNode,
+  label: string,
+  errors: string[],
+): void {
+  const options = (node.enumValues ?? []).map((value) => value.trim());
+
+  if (options.length === 0) {
+    errors.push(`${label} needs at least one option.`);
+    return;
+  }
+
+  if (options.some((option) => !option)) {
+    errors.push(`${label} cannot have blank options.`);
+  }
+
+  if (new Set(options).size !== options.length) {
+    errors.push(`${label} cannot have duplicate options.`);
+  }
+}
+
 function builderNodeFromJsonSchema(
   name: string,
   schema: JsonSchema,
   createId: () => string,
   requiredNames: string[] = [],
 ): BuilderNode {
-  const type = JSON_SCHEMA_TYPES.includes(schema.type) ? schema.type : "string";
+  const isEnum =
+    schema.type === "string" &&
+    Array.isArray(schema.enum) &&
+    schema.enum.every((value) => typeof value === "string");
+  const type: BuilderNodeType = isEnum
+    ? "enum"
+    : JSON_SCHEMA_TYPES.includes(schema.type)
+      ? schema.type
+      : "string";
   const node: BuilderNode = {
     id: createId(),
     name,
     type,
     required: requiredNames.includes(name),
   };
+
+  if (isEnum) {
+    node.enumValues = [...(schema.enum ?? [])];
+  }
 
   if (type === "object") {
     node.properties = propertiesFromJsonSchema(schema, createId);

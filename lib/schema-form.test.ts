@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { JsonSchema } from "./schema-builder";
 import {
   addArrayItem,
+  clearStaleEnumValues,
   createInitialValues,
   deriveFormFields,
   formValuesFromJson,
@@ -225,5 +226,83 @@ describe("path-based value helpers", () => {
 
     const withoutFirst = removeArrayItem(withNewItem, ["tags"], 0);
     expect(withoutFirst.tags).toEqual([{ label: "b" }]);
+  });
+});
+
+describe("enum fields", () => {
+  const enumSchema: JsonSchema = {
+    type: "object",
+    properties: {
+      status: { type: "string", enum: ["draft", "published"] },
+      meta: {
+        type: "object",
+        properties: { level: { type: "string", enum: ["low", "high"] } },
+      },
+      states: { type: "array", items: { type: "string", enum: ["a", "b"] } },
+    },
+    required: ["status"],
+  };
+
+  it("derives enum fields with options, nested and as array items", () => {
+    const fields = deriveFormFields(enumSchema);
+
+    expect(fields[0]).toMatchObject({
+      name: "status",
+      type: "enum",
+      options: ["draft", "published"],
+      required: true,
+    });
+    expect(fields[1].properties?.[0]).toMatchObject({
+      type: "enum",
+      options: ["low", "high"],
+    });
+    expect(fields[2].items).toMatchObject({ type: "enum", options: ["a", "b"] });
+  });
+
+  it("starts unselected and blocks submission while a required enum is empty", () => {
+    const fields = deriveFormFields(enumSchema);
+    const values = createInitialValues(fields);
+
+    expect(values.status).toBe("");
+    expect(validateFormValues(fields, values).missingFields).toEqual(["status"]);
+    expect(
+      validateFormValues(fields, { ...values, status: "draft" }).isValid,
+    ).toBe(true);
+  });
+
+  it("keeps imported values only when they match an option", () => {
+    const fields = deriveFormFields(enumSchema);
+
+    const valid = formValuesFromJson('{ "status": "published" }', fields);
+    expect(valid.ok && valid.values.status).toBe("published");
+
+    for (const input of ['{ "status": "archived" }', '{ "status": 1 }']) {
+      const result = formValuesFromJson(input, fields);
+      expect(result.ok && result.values.status).toBe("");
+    }
+
+    const nested = formValuesFromJson(
+      '{ "meta": { "level": "high" }, "states": ["a", "x"] }',
+      fields,
+    );
+    expect(nested.ok && nested.values).toMatchObject({
+      meta: { level: "high" },
+      states: ["a", ""],
+    });
+  });
+
+  it("blanks stale enum values in a loaded record", () => {
+    const fields = deriveFormFields(enumSchema);
+    const cleared = clearStaleEnumValues(fields, {
+      status: "archived",
+      meta: { level: "low" },
+      states: ["a", "gone"],
+    });
+
+    expect(cleared).toEqual({
+      status: "",
+      meta: { level: "low" },
+      states: ["a", ""],
+    });
   });
 });
