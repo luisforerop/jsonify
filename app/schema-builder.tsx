@@ -207,6 +207,11 @@ function SchemaBuilderInner({
                 ),
               )
             }
+            onEnumValuesChange={(id, enumValues) =>
+              setProperties((current) =>
+                updateNode(current, id, (node) => ({ ...node, enumValues })),
+              )
+            }
             onRemove={(id) =>
               setProperties((current) => removeNode(current, id))
             }

@@ -107,6 +107,7 @@ function FieldEditor({
       </span>
       <ScalarInput
         type={field.type}
+        options={field.options}
         value={value}
         onChange={(next) => onChange(path, next)}
       />
@@ -156,6 +157,7 @@ function ArrayItems({
               ) : (
                 <ScalarInput
                   type={itemField?.type ?? "string"}
+                  options={itemField?.options}
                   value={itemValue}
                   onChange={(next) => onChange(itemPath, next)}
                 />
@@ -187,13 +189,33 @@ function ArrayItems({
 
 function ScalarInput({
   type,
+  options,
   value,
   onChange,
 }: {
   type: FormField["type"];
+  options?: string[];
   value: FormValue | undefined;
   onChange: (value: FormValue) => void;
 }) {
+  if (type === "enum") {
+    const selected = typeof value === "string" ? value : "";
+
+    return (
+      <select
+        value={(options ?? []).includes(selected) ? selected : ""}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value=""></option>
+        {(options ?? []).map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
   if (type === "boolean") {
     return (
       <input

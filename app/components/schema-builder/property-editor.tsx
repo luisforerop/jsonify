@@ -1,17 +1,18 @@
 import type { ReactNode } from "react";
 
 import {
-  JSON_SCHEMA_TYPES,
+  BUILDER_TYPES,
   type BuilderNode,
-  type JsonSchemaType,
+  type BuilderNodeType,
 } from "@/lib/schema-builder";
 
 export type PropertyEditorHandlers = {
   onAddChild: (parentId: string) => void;
   onNameChange: (nodeId: string, name: string) => void;
-  onTypeChange: (nodeId: string, type: JsonSchemaType) => void;
+  onTypeChange: (nodeId: string, type: BuilderNodeType) => void;
   onRequiredChange: (nodeId: string, required: boolean) => void;
-  onItemTypeChange: (nodeId: string, type: JsonSchemaType) => void;
+  onItemTypeChange: (nodeId: string, type: BuilderNodeType) => void;
+  onEnumValuesChange: (nodeId: string, values: string[]) => void;
   onRemove: (nodeId: string) => void;
 };
 
@@ -39,6 +40,7 @@ function PropertyEditor({
   onTypeChange,
   onRequiredChange,
   onItemTypeChange,
+  onEnumValuesChange,
   onRemove,
 }: PropertyEditorHandlers & { node: BuilderNode }) {
   const item = node.items;
@@ -59,10 +61,10 @@ function PropertyEditor({
           <select
             value={node.type}
             onChange={(event) =>
-              onTypeChange(node.id, event.target.value as JsonSchemaType)
+              onTypeChange(node.id, event.target.value as BuilderNodeType)
             }
           >
-            {JSON_SCHEMA_TYPES.map((type) => (
+            {BUILDER_TYPES.map((type) => (
               <option key={type} value={type}>
                 {type}
               </option>
@@ -90,6 +92,13 @@ function PropertyEditor({
         </button>
       </div>
 
+      {node.type === "enum" && (
+        <EnumOptions
+          values={node.enumValues ?? []}
+          onChange={(values) => onEnumValuesChange(node.id, values)}
+        />
+      )}
+
       {node.type === "object" && (
         <NestedProperties
           label="Object properties"
@@ -102,6 +111,7 @@ function PropertyEditor({
             onTypeChange={onTypeChange}
             onRequiredChange={onRequiredChange}
             onItemTypeChange={onItemTypeChange}
+            onEnumValuesChange={onEnumValuesChange}
             onRemove={onRemove}
           />
         </NestedProperties>
@@ -114,16 +124,22 @@ function PropertyEditor({
             <select
               value={item.type}
               onChange={(event) =>
-                onItemTypeChange(node.id, event.target.value as JsonSchemaType)
+                onItemTypeChange(node.id, event.target.value as BuilderNodeType)
               }
             >
-              {JSON_SCHEMA_TYPES.map((type) => (
+              {BUILDER_TYPES.map((type) => (
                 <option key={type} value={type}>
                   {type}
                 </option>
               ))}
             </select>
           </label>
+          {item.type === "enum" && (
+            <EnumOptions
+              values={item.enumValues ?? []}
+              onChange={(values) => onEnumValuesChange(item.id, values)}
+            />
+          )}
           {item.type === "object" && (
             <NestedProperties
               label="Object item properties"
@@ -136,6 +152,7 @@ function PropertyEditor({
                 onTypeChange={onTypeChange}
                 onRequiredChange={onRequiredChange}
                 onItemTypeChange={onItemTypeChange}
+                onEnumValuesChange={onEnumValuesChange}
                 onRemove={onRemove}
               />
             </NestedProperties>
@@ -164,6 +181,57 @@ function NestedProperties({
         </button>
       </div>
       {children}
+    </section>
+  );
+}
+
+function EnumOptions({
+  values,
+  onChange,
+}: {
+  values: string[];
+  onChange: (values: string[]) => void;
+}) {
+  return (
+    <section className="nested-properties">
+      <div className="nested-heading">
+        <span>Enum options</span>
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => onChange([...values, ""])}
+        >
+          Add option
+        </button>
+      </div>
+      {values.map((value, index) => (
+        <div className="property-row" key={index}>
+          <label>
+            <span className="sr-only">Option {index + 1}</span>
+            <input
+              value={value}
+              onChange={(event) =>
+                onChange(
+                  values.map((current, valueIndex) =>
+                    valueIndex === index ? event.target.value : current,
+                  ),
+                )
+              }
+              placeholder="option"
+            />
+          </label>
+          <button
+            className="remove-property-button"
+            type="button"
+            onClick={() =>
+              onChange(values.filter((_, valueIndex) => valueIndex !== index))
+            }
+            aria-label={`Remove option ${index + 1}`}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
     </section>
   );
 }

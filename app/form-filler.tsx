@@ -17,6 +17,7 @@ import { useSavedSchemas } from "@/hooks/use-saved-schemas";
 import type { Workspace } from "@/hooks/use-workspaces";
 import {
   addArrayItem,
+  clearStaleEnumValues,
   createInitialValues,
   deriveFormFields,
   removeArrayItem,
@@ -103,7 +104,7 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
     setActiveSchemaId(record.schemaId);
     setSchemaName(savedSchema?.name ?? label);
     setFields(derivedFields);
-    setValues(record.payload);
+    setValues(clearStaleEnumValues(derivedFields, record.payload));
     setActiveRecordId(record.id);
     setMissingFields([]);
     setMode("form");
