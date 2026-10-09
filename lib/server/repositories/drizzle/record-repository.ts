@@ -1,10 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { records } from "@/db/schema";
 import type { RecordRepository } from "@/lib/server/repositories/record-repository";
 import type {
   NewRecord,
+  RecordPageQuery,
   RecordPatch,
   RecordRow,
 } from "@/lib/server/repositories/types";
@@ -40,6 +41,24 @@ export const drizzleRecordRepository: RecordRepository = {
       .from(records)
       .where(eq(records.collectionId, collectionId));
     return rows.map(toRecord);
+  },
+
+  async listPageByCollection(collectionId, query: RecordPageQuery) {
+    const where = and(
+      eq(records.collectionId, collectionId),
+      query.schemaId ? eq(records.schemaId, query.schemaId) : undefined,
+    );
+    const [rows, [totalRow]] = await Promise.all([
+      db
+        .select()
+        .from(records)
+        .where(where)
+        .orderBy(desc(records.createdAt), desc(records.id))
+        .limit(query.limit)
+        .offset(query.offset),
+      db.select({ total: count() }).from(records).where(where),
+    ]);
+    return { rows: rows.map(toRecord), total: totalRow?.total ?? 0 };
   },
 
   async list() {

@@ -133,6 +133,17 @@ export type RecordRow = {
   updatedAt: string;
 };
 
+export type RecordPageQuery = {
+  schemaId?: string;
+  limit: number;
+  offset: number;
+};
+
+export type RecordPage = {
+  rows: RecordRow[];
+  total: number;
+};
+
 export type NewRecord = {
   workspaceId: string;
   collectionId: string;

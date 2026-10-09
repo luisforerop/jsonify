@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import type { FormValues } from "@/lib/schema-form";
@@ -18,6 +19,8 @@ type SavedEntriesPanelProps = {
   entries: SavedEntry[];
   activeEntryId: string | null;
   isLoaded: boolean;
+  /** Where the full, paginated table of this collection's records lives. */
+  allRecordsHref: string;
   onOpenEntry: (id: string) => void;
   onDeleteEntry: (id: string) => void;
 };
@@ -26,6 +29,7 @@ export function SavedEntriesPanel({
   entries,
   activeEntryId,
   isLoaded,
+  allRecordsHref,
   onOpenEntry,
   onDeleteEntry,
 }: SavedEntriesPanelProps) {
@@ -54,6 +58,9 @@ export function SavedEntriesPanel({
         title="Saved records"
         badge={String(entries.length)}
       />
+      <Link className="button button-outline" href={allRecordsHref}>
+        View all records
+      </Link>
       {!isLoaded && <p className="status-copy">Loading records...</p>}
       {isLoaded && entries.length === 0 && (
         <p className="status-copy">Submitted records will appear here.</p>

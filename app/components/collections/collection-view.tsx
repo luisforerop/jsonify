@@ -162,7 +162,7 @@ export function CollectionView({
               <div className="properties-heading">
                 <div>
                   <h2>Continue in this collection</h2>
-                  <p>Jump into the schema-builder or the form-filler.</p>
+                  <p>Jump into the schema-builder, the form-filler, or the records table.</p>
                 </div>
               </div>
               <div className="topbar-actions">
@@ -177,6 +177,12 @@ export function CollectionView({
                   href={`/w/${workspace.slug}/${collection.slug}/form-filler`}
                 >
                   Form filler
+                </Link>
+                <Link
+                  className="button button-outline"
+                  href={`/w/${workspace.slug}/${collection.slug}/records`}
+                >
+                  Records
                 </Link>
                 <button
                   className="button button-outline"

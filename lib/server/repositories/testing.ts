@@ -288,6 +288,23 @@ export function makeFakeRepositories(): Repositories & {
       async listByCollection(collectionId) {
         return records.filter((r) => r.collectionId === collectionId);
       },
+      async listPageByCollection(collectionId, query) {
+        const matching = records
+          .filter(
+            (r) =>
+              r.collectionId === collectionId &&
+              (!query.schemaId || r.schemaId === query.schemaId),
+          )
+          .sort(
+            (a, b) =>
+              b.createdAt.localeCompare(a.createdAt) ||
+              b.id.localeCompare(a.id),
+          );
+        return {
+          rows: matching.slice(query.offset, query.offset + query.limit),
+          total: matching.length,
+        };
+      },
       async list() {
         return [...records];
       },

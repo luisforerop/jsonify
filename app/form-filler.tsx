@@ -239,6 +239,7 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
           }))}
           activeEntryId={activeRecordId}
           isLoaded={recordsLoaded}
+          allRecordsHref={`/w/${workspace.slug}/${collection.slug}/records`}
           onOpenEntry={loadRecord}
           onDeleteEntry={deleteRecord}
         />
