@@ -12,6 +12,7 @@ export type SavedSchemaResponse = {
   schema: JsonSchema;
   collectionId: string;
   isActive: boolean;
+  sharingEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -23,6 +24,7 @@ export function toSavedSchema(row: SchemaRow): SavedSchemaResponse {
     schema: row.schemaDefinition,
     collectionId: row.collectionId,
     isActive: row.isActive,
+    sharingEnabled: row.sharingEnabled,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

@@ -62,7 +62,11 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [mode, setMode] = useState<"form" | "import">("form");
 
-  const { schemas, isLoaded: schemasLoaded } = useSavedSchemas(collection.id);
+  const {
+    schemas,
+    isLoaded: schemasLoaded,
+    setSharing,
+  } = useSavedSchemas(collection.id);
   const {
     records,
     error,
@@ -206,6 +210,7 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
           activeSchemaId={activeSchemaId}
           isLoaded={schemasLoaded}
           onSelectSchema={loadSchema}
+          onToggleSharing={setSharing}
         />
         {mode === "import" ? (
           <FormJsonImportPanel

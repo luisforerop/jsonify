@@ -12,6 +12,7 @@ export type SavedSchema = {
   schema: JsonSchema;
   collectionId: string;
   isActive: boolean;
+  sharingEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -30,6 +31,7 @@ export type SavedSchemasHook = {
   read: () => Promise<void>;
   update: (id: string, input: SavedSchemaInput) => Promise<SavedSchema | null>;
   remove: (id: string) => Promise<boolean>;
+  setSharing: (id: string, enabled: boolean) => Promise<boolean>;
 };
 
 const LOAD_ERROR = "Saved schemas are unavailable right now.";
@@ -120,10 +122,34 @@ export function useSavedSchemas(collectionId?: string): SavedSchemasHook {
     }
   }
 
+  async function setSharing(id: string, enabled: boolean): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_BASE}/${id}/sharing`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      if (response.status === 404) {
+        setError(MISSING_ERROR);
+        return false;
+      }
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+      const savedSchema = (await response.json()) as SavedSchema;
+      setAllSchemas((current) =>
+        current.map((item) => (item.id === id ? savedSchema : item)),
+      );
+      setError(null);
+      return true;
+    } catch {
+      setError(SAVE_ERROR);
+      return false;
+    }
+  }
+
   const schemas =
     collectionId === undefined
       ? allSchemas
       : allSchemas.filter((schema) => schema.collectionId === collectionId);
 
-  return { schemas, error, isLoaded, create, read, update, remove };
+  return { schemas, error, isLoaded, create, read, update, remove, setSharing };
 }

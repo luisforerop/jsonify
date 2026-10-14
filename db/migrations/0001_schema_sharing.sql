@@ -1,0 +1,1 @@
+ALTER TABLE "schemas" ADD COLUMN "sharing_enabled" boolean DEFAULT false NOT NULL;

@@ -259,6 +259,7 @@ export function makeFakeRepositories(): Repositories & {
           name: input.name,
           schemaDefinition: input.schemaDefinition,
           isActive: input.isActive ?? true,
+          sharingEnabled: input.sharingEnabled ?? false,
           ...stamp(),
         };
         schemas.push(schema);

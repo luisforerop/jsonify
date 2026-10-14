@@ -14,6 +14,7 @@ function storedSchema(
     name: "Receta",
     collectionId: "c1",
     isActive: true,
+    sharingEnabled: false,
     schemaDefinition: schema,
     ...overrides,
   };

@@ -114,6 +114,7 @@ export const schemas = pgTable(
     name: text("name").notNull(),
     schemaDefinition: jsonb("schema_definition").$type<JsonSchema>().notNull(),
     isActive: boolean("is_active").notNull().default(true),
+    sharingEnabled: boolean("sharing_enabled").notNull().default(false),
     ...timestamps,
   },
   (table) => [

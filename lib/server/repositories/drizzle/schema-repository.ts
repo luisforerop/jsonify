@@ -23,6 +23,7 @@ function toSchema(row: Row): SchemaRow {
     name: row.name,
     schemaDefinition: row.schemaDefinition,
     isActive: row.isActive,
+    sharingEnabled: row.sharingEnabled,
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
   };
@@ -77,6 +78,7 @@ export const drizzleSchemaRepository: SchemaRepository = {
           name: input.name,
           schemaDefinition: input.schemaDefinition,
           isActive: input.isActive ?? true,
+          sharingEnabled: input.sharingEnabled ?? false,
         })
         .returning();
       return toSchema(row);

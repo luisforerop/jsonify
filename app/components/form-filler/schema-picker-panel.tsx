@@ -1,5 +1,6 @@
 import type { SavedSchema } from "@/hooks/use-saved-schemas";
 
+import { ShareControl } from "@/app/components/form-filler/share-control";
 import { PanelHeading } from "@/app/components/schema-builder/panel-heading";
 
 type SchemaPickerPanelProps = {
@@ -7,6 +8,7 @@ type SchemaPickerPanelProps = {
   activeSchemaId: string | null;
   isLoaded: boolean;
   onSelectSchema: (id: string) => void;
+  onToggleSharing: (id: string, enabled: boolean) => Promise<boolean>;
 };
 
 export function SchemaPickerPanel({
@@ -14,6 +16,7 @@ export function SchemaPickerPanel({
   activeSchemaId,
   isLoaded,
   onSelectSchema,
+  onToggleSharing,
 }: SchemaPickerPanelProps) {
   return (
     <aside className="saved-panel" aria-label="Saved schemas">
@@ -49,6 +52,15 @@ export function SchemaPickerPanel({
           </li>
         ))}
       </ul>
+      {schemas
+        .filter((schema) => schema.id === activeSchemaId)
+        .map((schema) => (
+          <ShareControl
+            key={schema.id}
+            schema={schema}
+            onToggle={(enabled) => onToggleSharing(schema.id, enabled)}
+          />
+        ))}
     </aside>
   );
 }

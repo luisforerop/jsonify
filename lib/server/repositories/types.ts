@@ -106,6 +106,7 @@ export type SchemaRow = {
   name: string;
   schemaDefinition: JsonSchema;
   isActive: boolean;
+  sharingEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -115,12 +116,14 @@ export type NewSchema = {
   name: string;
   schemaDefinition: JsonSchema;
   isActive?: boolean;
+  sharingEnabled?: boolean;
 };
 
 export type SchemaPatch = {
   name?: string;
   schemaDefinition?: JsonSchema;
   isActive?: boolean;
+  sharingEnabled?: boolean;
 };
 
 export type RecordRow = {
