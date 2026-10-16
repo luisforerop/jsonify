@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { JsonSchema } from "./schema-builder";
 import {
   addArrayItem,
-  clearStaleEnumValues,
+  clearInvalidValues,
   createInitialValues,
   deriveFormFields,
   formValuesFromJson,
+  isValidDate,
+  isValidTime,
   labelFieldPaths,
   removeArrayItem,
   setValueAtPath,
@@ -352,7 +354,7 @@ describe("enum fields", () => {
 
   it("blanks stale enum values in a loaded record", () => {
     const fields = deriveFormFields(enumSchema);
-    const cleared = clearStaleEnumValues(fields, {
+    const cleared = clearInvalidValues(fields, {
       status: "archived",
       meta: { level: "low" },
       states: ["a", "gone"],
@@ -362,6 +364,101 @@ describe("enum fields", () => {
       status: "",
       meta: { level: "low" },
       states: ["a", ""],
+    });
+  });
+});
+
+describe("date and time fields", () => {
+  const dateSchema: JsonSchema = {
+    type: "object",
+    properties: {
+      birthday: { type: "string", format: "date" },
+      opens_at: { type: "string", format: "time" },
+      other: { type: "string", format: "email" },
+      meta: {
+        type: "object",
+        properties: { since: { type: "string", format: "date" } },
+      },
+      days: { type: "array", items: { type: "string", format: "date" } },
+    },
+    required: ["birthday"],
+  };
+
+  it("derives date and time fields from string formats", () => {
+    const fields = deriveFormFields(dateSchema);
+
+    expect(fields.map((field) => field.type)).toEqual([
+      "date",
+      "time",
+      "string",
+      "object",
+      "array",
+    ]);
+    expect(fields[3].properties?.[0].type).toBe("date");
+    expect(fields[4].items?.type).toBe("date");
+  });
+
+  it("starts empty and blocks a missing required date", () => {
+    const fields = deriveFormFields(dateSchema);
+    const values = createInitialValues(fields);
+
+    expect(values.birthday).toBe("");
+    expect(values.opens_at).toBe("");
+    expect(validateFormValues(fields, values).missingFields).toEqual([
+      "birthday",
+    ]);
+  });
+
+  it("validates dates and times", () => {
+    expect(isValidDate("2026-03-05")).toBe(true);
+    expect(isValidDate("2024-02-29")).toBe(true);
+    expect(isValidDate("2026-02-31")).toBe(false);
+    expect(isValidDate("05/03/2026")).toBe(false);
+    expect(isValidTime("14:30")).toBe(true);
+    expect(isValidTime("14:30:15")).toBe(true);
+    expect(isValidTime("25:70")).toBe(false);
+    expect(isValidTime("2:30")).toBe(false);
+  });
+
+  it("keeps valid imported values and blanks invalid ones", () => {
+    const fields = deriveFormFields(dateSchema);
+    const valid = formValuesFromJson(
+      '{ "birthday": "2026-03-05", "opens_at": "14:30" }',
+      fields,
+    );
+    expect(valid.ok && valid.values).toMatchObject({
+      birthday: "2026-03-05",
+      opens_at: "14:30",
+    });
+
+    for (const input of [
+      '{ "birthday": "05/03/2026", "opens_at": "25:70" }',
+      '{ "birthday": "2026-02-31", "opens_at": 1430 }',
+    ]) {
+      const result = formValuesFromJson(input, fields);
+      expect(result.ok && result.values).toMatchObject({
+        birthday: "",
+        opens_at: "",
+      });
+    }
+  });
+
+  it("blanks out-of-format values in a loaded record", () => {
+    const fields = deriveFormFields(dateSchema);
+    const cleared = clearInvalidValues(fields, {
+      birthday: "2026-03-05",
+      opens_at: "late",
+      other: "x",
+      meta: { since: "yesterday" },
+      days: ["2026-03-05", "nope"],
+    });
+
+    expect(cleared).toEqual({
+      birthday: "2026-03-05",
+      opens_at: "",
+      other: "x",
+      meta: { since: "" },
+      days: ["2026-03-05", ""],
     });
   });
 });

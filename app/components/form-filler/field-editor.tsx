@@ -8,6 +8,8 @@ import type {
 } from "@/lib/schema-form";
 import { createInitialValue } from "@/lib/schema-form";
 
+import { resolveWidget, type WidgetValue } from "../widgets";
+
 type FieldGroupProps = {
   fields: FormField[];
   values: FormValues;
@@ -106,8 +108,7 @@ function FieldEditor({
         {field.required && <span className="required-mark">*</span>}
       </span>
       <ScalarInput
-        type={field.type}
-        options={field.options}
+        field={field}
         value={value}
         onChange={(next) => onChange(path, next)}
       />
@@ -156,8 +157,7 @@ function ArrayItems({
                 />
               ) : (
                 <ScalarInput
-                  type={itemField?.type ?? "string"}
-                  options={itemField?.options}
+                  field={itemField}
                   value={itemValue}
                   onChange={(next) => onChange(itemPath, next)}
                 />
@@ -187,67 +187,23 @@ function ArrayItems({
   );
 }
 
+/** Renders the widget registered for the field's type. */
 function ScalarInput({
-  type,
-  options,
+  field,
   value,
   onChange,
 }: {
-  type: FormField["type"];
-  options?: string[];
+  field: FormField | undefined;
   value: FormValue | undefined;
   onChange: (value: FormValue) => void;
 }) {
-  if (type === "enum") {
-    const selected = typeof value === "string" ? value : "";
-
-    return (
-      <select
-        value={(options ?? []).includes(selected) ? selected : ""}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value=""></option>
-        {(options ?? []).map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
-  if (type === "boolean") {
-    return (
-      <input
-        checked={Boolean(value)}
-        type="checkbox"
-        onChange={(event) => onChange(event.target.checked)}
-      />
-    );
-  }
-
-  if (type === "null") {
-    return <input disabled type="text" value="null" />;
-  }
-
-  if (type === "number" || type === "integer") {
-    return (
-      <input
-        step={type === "integer" ? 1 : "any"}
-        type="number"
-        value={value === null || value === undefined ? "" : String(value)}
-        onChange={(event) =>
-          onChange(event.target.value === "" ? "" : Number(event.target.value))
-        }
-      />
-    );
-  }
+  const Widget = resolveWidget(field?.type ?? "string");
 
   return (
-    <input
-      type="text"
-      value={value === null || value === undefined ? "" : String(value)}
-      onChange={(event) => onChange(event.target.value)}
+    <Widget
+      value={value as WidgetValue | undefined}
+      options={field?.options}
+      onChange={onChange}
     />
   );
 }

@@ -388,3 +388,75 @@ describe("friendly labels", () => {
     expect(result.isValid).toBe(true);
   });
 });
+
+describe("date and time properties", () => {
+  const node = (id: string, name: string, type: BuilderNode["type"]): BuilderNode => ({
+    id,
+    name,
+    type,
+    required: false,
+  });
+
+  it("emits date and time as strings with a format", () => {
+    const schema = createJsonSchema("Shop", [
+      node("a", "birthday", "date"),
+      node("b", "opens_at", "time"),
+    ]);
+
+    expect(schema.properties?.birthday).toEqual({
+      type: "string",
+      format: "date",
+      title: "birthday",
+    });
+    expect(schema.properties?.opens_at).toEqual({
+      type: "string",
+      format: "time",
+      title: "opens_at",
+    });
+  });
+
+  it("emits date as an array item type", () => {
+    const schema = createJsonSchema("Shop", [
+      {
+        ...node("a", "days", "array"),
+        items: node("b", "items", "date"),
+      },
+    ]);
+
+    expect(schema.properties?.days.items).toEqual({
+      type: "string",
+      format: "date",
+    });
+  });
+
+  it("drops the format when the type changes", () => {
+    const changed = changeNodeType(node("a", "when", "date"), "number", () => "x");
+    const schema = createJsonSchema("Shop", [changed]);
+
+    expect(schema.properties?.when).toEqual({ type: "number", title: "when" });
+  });
+
+  it("reloads saved date and time strings as date and time nodes", () => {
+    const [birthday, opensAt, other] = propertiesFromJsonSchema(
+      {
+        type: "object",
+        properties: {
+          birthday: { type: "string", format: "date" },
+          opens_at: { type: "string", format: "time" },
+          email: { type: "string", format: "email" },
+        },
+      },
+      sequentialId(),
+    );
+
+    expect(birthday.type).toBe("date");
+    expect(opensAt.type).toBe("time");
+    expect(other.type).toBe("string");
+  });
+
+  it("does not infer dates from sample JSON", () => {
+    const [created] = importProperties('{ "created": "2026-03-05" }');
+
+    expect(created.type).toBe("string");
+  });
+});

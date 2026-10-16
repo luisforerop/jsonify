@@ -10,8 +10,17 @@ export const JSON_SCHEMA_TYPES = [
 
 export type JsonSchemaType = (typeof JSON_SCHEMA_TYPES)[number];
 
-/** Types selectable in the builder: JSON Schema types plus the `enum` pseudo-type. */
-export const BUILDER_TYPES = [...JSON_SCHEMA_TYPES, "enum"] as const;
+/** Pseudo-types stored as a `string` with a JSON Schema `format`. */
+export const FORMAT_TYPES = ["date", "time"] as const;
+
+export type FormatType = (typeof FORMAT_TYPES)[number];
+
+/** Types selectable in the builder: JSON Schema types plus the `enum`, `date` and `time` pseudo-types. */
+export const BUILDER_TYPES = [
+  ...JSON_SCHEMA_TYPES,
+  "enum",
+  ...FORMAT_TYPES,
+] as const;
 
 export type BuilderNodeType = (typeof BUILDER_TYPES)[number];
 
@@ -32,6 +41,7 @@ export type JsonSchema = {
   title?: string;
   type: JsonSchemaType;
   enum?: string[];
+  format?: string;
   properties?: Record<string, JsonSchema>;
   required?: string[];
   items?: JsonSchema;
@@ -61,6 +71,13 @@ export function normalizeKey(label: string): string {
 /** The key a property is stored under: its persisted key, else derived. */
 export function resolveKey(node: BuilderNode): string {
   return node.key ?? normalizeKey(node.name);
+}
+
+/** The pseudo-type for a `string` schema's `format`, if it is one we support. */
+export function formatTypeOf(schema: JsonSchema): FormatType | undefined {
+  return schema.type === "string"
+    ? FORMAT_TYPES.find((type) => type === schema.format)
+    : undefined;
 }
 
 export function createBuilderNode(id: string, name = ""): BuilderNode {
@@ -150,6 +167,10 @@ export function toJsonSchema(node: BuilderNode): JsonSchema {
       type: "string",
       enum: (node.enumValues ?? []).map((value) => value.trim()),
     };
+  }
+
+  if (node.type === "date" || node.type === "time") {
+    return { type: "string", format: node.type };
   }
 
   if (node.type === "object") {
@@ -366,11 +387,11 @@ function builderNodeFromJsonSchema(
     schema.type === "string" &&
     Array.isArray(schema.enum) &&
     schema.enum.every((value) => typeof value === "string");
+  const formatType = isEnum ? undefined : formatTypeOf(schema);
   const type: BuilderNodeType = isEnum
     ? "enum"
-    : JSON_SCHEMA_TYPES.includes(schema.type)
-      ? schema.type
-      : "string";
+    : (formatType ??
+      (JSON_SCHEMA_TYPES.includes(schema.type) ? schema.type : "string"));
   const title = typeof schema.title === "string" ? schema.title.trim() : "";
   const node: BuilderNode = {
     id: createId(),

@@ -135,3 +135,52 @@ describe("validatePayload", () => {
     expect(result).toMatchObject({ valid: false, reason: "uncompilable-schema" });
   });
 });
+
+describe("validatePayload date and time formats", () => {
+  const schema = storedSchema(
+    {
+      type: "object",
+      properties: {
+        birthday: { type: "string", format: "date" },
+        opens_at: { type: "string", format: "time" },
+        email: { type: "string", format: "email" },
+      },
+    },
+    { id: "date-time-schema" },
+  );
+
+  it("accepts valid dates and times", () => {
+    expect(
+      validatePayload(schema, { birthday: "2026-03-05", opens_at: "14:30" }),
+    ).toEqual({ valid: true });
+    expect(validatePayload(schema, { opens_at: "14:30:15" })).toEqual({
+      valid: true,
+    });
+  });
+
+  it("rejects malformed dates", () => {
+    for (const birthday of ["2026-02-31", "05/03/2026", "tomorrow"]) {
+      const result = validatePayload(schema, { birthday });
+      expect(result).toMatchObject({ valid: false, reason: "invalid" });
+      expect((result as { details: string[] }).details.join("\n")).toContain(
+        "/birthday",
+      );
+    }
+  });
+
+  it("rejects malformed times", () => {
+    for (const opens_at of ["25:70", "2:30", "noon"]) {
+      const result = validatePayload(schema, { opens_at });
+      expect(result).toMatchObject({ valid: false, reason: "invalid" });
+      expect((result as { details: string[] }).details.join("\n")).toContain(
+        "/opens_at",
+      );
+    }
+  });
+
+  it("keeps ignoring other formats", () => {
+    expect(validatePayload(schema, { email: "not-an-email" })).toEqual({
+      valid: true,
+    });
+  });
+});

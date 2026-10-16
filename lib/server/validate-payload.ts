@@ -1,4 +1,5 @@
 import Ajv2020, { type ValidateFunction } from "ajv/dist/2020";
+import addFormats from "ajv-formats";
 
 import { corsJson } from "@/lib/server/cors";
 import type { SchemaRow } from "@/lib/server/repositories";
@@ -17,6 +18,13 @@ export type PayloadValidation =
  * `allErrors: true` — report every violation, not only the first.
  */
 const ajv = new Ajv2020({ strict: false, allErrors: true });
+
+// Only the formats the builder can emit are enforced; any other `format` keeps
+// being ignored so existing schemas are not suddenly rejected.
+addFormats(ajv, { formats: ["date"], keywords: false });
+// The builder's `time` is a plain 24-hour time (`HH:mm`), which the standard
+// `time` format rejects because it requires seconds.
+ajv.addFormat("time", /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)?$/i);
 
 /** Compiled validators keyed by schema id + `updatedAt`, so edits invalidate. */
 const validators = new Map<string, ValidateFunction>();

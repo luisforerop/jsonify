@@ -1,4 +1,5 @@
 import {
+  formatTypeOf,
   JSON_SCHEMA_TYPES,
   type JsonSchema,
   type JsonSchemaType,
@@ -8,7 +9,7 @@ export type FormField = {
   name: string;
   /** Text shown to the person filling the form: the schema `title`, else the key. */
   label: string;
-  type: JsonSchemaType | "enum";
+  type: JsonSchemaType | "enum" | "date" | "time";
   required: boolean;
   options?: string[];
   properties?: FormField[];
@@ -49,9 +50,8 @@ function formFieldFromJsonSchema(
     schema.enum.every((value) => typeof value === "string");
   const type: FormField["type"] = isEnum
     ? "enum"
-    : JSON_SCHEMA_TYPES.includes(schema.type)
-      ? schema.type
-      : "string";
+    : (formatTypeOf(schema) ??
+      (JSON_SCHEMA_TYPES.includes(schema.type) ? schema.type : "string"));
   const title = typeof schema.title === "string" ? schema.title.trim() : "";
   const field: FormField = {
     name,
@@ -241,6 +241,14 @@ function conformValue(field: FormField, raw: unknown): FormValue {
       : "";
   }
 
+  if (field.type === "date") {
+    return typeof raw === "string" && isValidDate(raw) ? raw : "";
+  }
+
+  if (field.type === "time") {
+    return typeof raw === "string" && isValidTime(raw) ? raw : "";
+  }
+
   if (field.type === "boolean") {
     return typeof raw === "boolean" ? raw : false;
   }
@@ -270,33 +278,64 @@ function conformValue(field: FormField, raw: unknown): FormValue {
   return "";
 }
 
-/** Blank enum values that are no longer among the field's options (e.g. a saved record from before an option was removed). */
-export function clearStaleEnumValues(
+/** Whether `value` is an ISO 8601 calendar date (`YYYY-MM-DD`) that exists. */
+export function isValidDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return false;
+  }
+
+  const [year, month, day] = match.slice(1).map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+/** Whether `value` is a 24-hour time (`HH:mm` or `HH:mm:ss`). */
+export function isValidTime(value: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(value);
+}
+
+/** Blank values that no longer fit their field: enum values outside the options, and dates or times in the wrong format (e.g. a saved record from before the schema changed). */
+export function clearInvalidValues(
   fields: FormField[],
   values: FormValues,
 ): FormValues {
   return Object.fromEntries(
     Object.entries(values).map(([key, value]) => {
       const field = fields.find((candidate) => candidate.name === key);
-      return [key, field ? clearStaleEnumValue(field, value) : value];
+      return [key, field ? clearInvalidValue(field, value) : value];
     }),
   );
 }
 
-function clearStaleEnumValue(field: FormField, value: FormValue): FormValue {
+function clearInvalidValue(field: FormField, value: FormValue): FormValue {
   if (field.type === "enum") {
     return typeof value === "string" && (field.options ?? []).includes(value)
       ? value
       : "";
   }
 
+  if (field.type === "date") {
+    return typeof value === "string" && isValidDate(value) ? value : "";
+  }
+
+  if (field.type === "time") {
+    return typeof value === "string" && isValidTime(value) ? value : "";
+  }
+
   if (field.type === "object" && isPlainObject(value)) {
-    return clearStaleEnumValues(field.properties ?? [], value as FormValues);
+    return clearInvalidValues(field.properties ?? [], value as FormValues);
   }
 
   if (field.type === "array" && field.items && Array.isArray(value)) {
     const itemField = field.items;
-    return value.map((item) => clearStaleEnumValue(itemField, item));
+    return value.map((item) => clearInvalidValue(itemField, item));
   }
 
   return value;
