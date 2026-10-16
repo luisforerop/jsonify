@@ -20,6 +20,7 @@ import {
   clearStaleEnumValues,
   createInitialValues,
   deriveFormFields,
+  labelFieldPaths,
   removeArrayItem,
   setValueAtPath,
   validateFormValues,
@@ -138,7 +139,10 @@ function FormFillerInner({ workspace, collection }: FormFillerInnerProps) {
 
     const validation = validateFormValues(fields, nextValues);
     if (!validation.isValid) {
-      return { status: "invalid", missingFields: validation.missingFields };
+      return {
+        status: "invalid",
+        missingFields: labelFieldPaths(fields, validation.missingFields),
+      };
     }
 
     const savedRecord = await create({

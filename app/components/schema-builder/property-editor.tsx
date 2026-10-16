@@ -4,6 +4,7 @@ import {
   BUILDER_TYPES,
   type BuilderNode,
   type BuilderNodeType,
+  resolveKey,
 } from "@/lib/schema-builder";
 
 export type PropertyEditorHandlers = {
@@ -49,11 +50,11 @@ function PropertyEditor({
     <article className="property-editor">
       <div className="property-row">
         <label>
-          <span className="sr-only">Property name</span>
+          <span className="sr-only">Property label</span>
           <input
             value={node.name}
             onChange={(event) => onNameChange(node.id, event.target.value)}
-            placeholder="property_name"
+            placeholder="Property label, e.g. Fecha de ingreso"
           />
         </label>
         <label>
@@ -91,6 +92,12 @@ function PropertyEditor({
           Remove
         </button>
       </div>
+
+      {node.name.trim() !== "" && resolveKey(node) !== node.name.trim() && (
+        <p className="property-key">
+          Stored as <code>{resolveKey(node) || "no valid key"}</code>
+        </p>
+      )}
 
       {node.type === "enum" && (
         <EnumOptions

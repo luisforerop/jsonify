@@ -20,6 +20,8 @@ export type BuilderNode = {
   name: string;
   type: BuilderNodeType;
   required: boolean;
+  /** Stored property key. When set it wins over the key derived from `name`. */
+  key?: string;
   enumValues?: string[];
   properties?: BuilderNode[];
   items?: BuilderNode;
@@ -39,6 +41,27 @@ export type SchemaValidation = {
   isValid: boolean;
   errors: string[];
 };
+
+/**
+ * Derives a storable property key from a display label: diacritics removed,
+ * lower-cased, runs of non-alphanumerics collapsed to `_`, never starting with
+ * a digit.
+ */
+export function normalizeKey(label: string): string {
+  const key = label
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return /^[0-9]/.test(key) ? `field_${key}` : key;
+}
+
+/** The key a property is stored under: its persisted key, else derived. */
+export function resolveKey(node: BuilderNode): string {
+  return node.key ?? normalizeKey(node.name);
+}
 
 export function createBuilderNode(id: string, name = ""): BuilderNode {
   return { id, name, type: "string", required: false };
@@ -158,15 +181,15 @@ export function createJsonSchema(
 
 function createObjectSchema(properties: BuilderNode[]): JsonSchema {
   const required = properties
-    .filter((property) => property.required && property.name.trim())
-    .map((property) => property.name.trim());
+    .filter((property) => property.required && resolveKey(property))
+    .map(resolveKey);
 
   return {
     type: "object",
     properties: Object.fromEntries(
       properties.map((property) => [
-        property.name.trim(),
-        toJsonSchema(property),
+        resolveKey(property),
+        { ...toJsonSchema(property), title: property.name.trim() },
       ]),
     ),
     ...(required.length > 0 ? { required } : {}),
@@ -177,9 +200,10 @@ export function propertiesFromJsonSchema(
   schema: JsonSchema,
   createId: () => string,
 ): BuilderNode[] {
-  return Object.entries(schema.properties ?? {}).map(([name, property]) =>
-    builderNodeFromJsonSchema(name, property, createId, schema.required ?? []),
-  );
+  return Object.entries(schema.properties ?? {}).map(([key, property]) => ({
+    ...builderNodeFromJsonSchema(key, property, createId, schema.required ?? []),
+    key,
+  }));
 }
 
 export type JsonImportResult =
@@ -264,18 +288,19 @@ function validatePropertyLevel(
   location: string,
   errors: string[],
 ): void {
-  const names = new Set<string>();
+  const labelsByKey = new Map<string, string[]>();
 
   properties.forEach((property, index) => {
     const name = property.name.trim();
+    const key = resolveKey(property);
     const label = `${location} property ${index + 1}`;
 
     if (!name) {
       errors.push(`${label} needs a name.`);
-    } else if (names.has(name)) {
-      errors.push(`${location} cannot contain duplicate property names.`);
+    } else if (!key) {
+      errors.push(`${label} needs a name with letters or digits.`);
     } else {
-      names.add(name);
+      labelsByKey.set(key, [...(labelsByKey.get(key) ?? []), name]);
     }
 
     if (property.type === "object") {
@@ -295,6 +320,16 @@ function validatePropertyLevel(
         property.items.properties ?? [],
         `${name || label} items`,
         errors,
+      );
+    }
+  });
+
+  labelsByKey.forEach((labels) => {
+    if (labels.length > 1) {
+      errors.push(
+        `${location} cannot contain duplicate property names: ${labels
+          .map((label) => `"${label}"`)
+          .join(", ")}.`,
       );
     }
   });
@@ -336,9 +371,10 @@ function builderNodeFromJsonSchema(
     : JSON_SCHEMA_TYPES.includes(schema.type)
       ? schema.type
       : "string";
+  const title = typeof schema.title === "string" ? schema.title.trim() : "";
   const node: BuilderNode = {
     id: createId(),
-    name,
+    name: title || name,
     type,
     required: requiredNames.includes(name),
   };

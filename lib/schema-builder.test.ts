@@ -4,6 +4,7 @@ import {
   changeNodeType,
   createBuilderNode,
   createJsonSchema,
+  normalizeKey,
   propertiesFromJsonSchema,
   schemaFromSampleJson,
   validateSchema,
@@ -66,15 +67,17 @@ describe("schema builder", () => {
       type: "object",
       properties: {
         profile: {
+          title: "profile",
           type: "object",
-          properties: { email: { type: "string" } },
+          properties: { email: { title: "email", type: "string" } },
           required: ["email"],
         },
         tags: {
+          title: "tags",
           type: "array",
           items: {
             type: "object",
-            properties: { label: { type: "string" } },
+            properties: { label: { title: "label", type: "string" } },
             required: ["label"],
           },
         },
@@ -94,7 +97,7 @@ describe("schema builder", () => {
     expect(invalid.errors).toContain("Enter a name for this schema.");
     expect(invalid.errors).toContain("Root property 1 needs a name.");
     expect(invalid.errors).toContain(
-      "Root cannot contain duplicate property names.",
+      'Root cannot contain duplicate property names: "name", "name".',
     );
   });
 });
@@ -272,5 +275,116 @@ describe("enum properties", () => {
     expect(validateSchema("T", [array]).errors).toEqual([
       "states items needs at least one option.",
     ]);
+  });
+});
+
+describe("normalizeKey", () => {
+  it("removes accents and punctuation", () => {
+    expect(normalizeKey("¿Año de nacimiento?")).toBe("ano_de_nacimiento");
+  });
+
+  it("collapses whitespace and symbols and trims underscores", () => {
+    expect(normalizeKey("  Nombre   completo / apellido ")).toBe(
+      "nombre_completo_apellido",
+    );
+  });
+
+  it("prefixes keys that would start with a digit", () => {
+    expect(normalizeKey("2do apellido")).toBe("field_2do_apellido");
+  });
+
+  it("returns an empty key when nothing alphanumeric remains", () => {
+    expect(normalizeKey("???")).toBe("");
+  });
+});
+
+describe("friendly labels", () => {
+  const node = (
+    id: string,
+    name: string,
+    extra: Partial<BuilderNode> = {},
+  ): BuilderNode => ({ id, name, type: "string", required: false, ...extra });
+
+  it("stores the label as title under the normalized key, including required", () => {
+    const schema = createJsonSchema("Persona", [
+      node("a", "Fecha de ingreso"),
+      node("b", "Teléfono móvil", { required: true }),
+    ]);
+
+    expect(schema.properties).toEqual({
+      fecha_de_ingreso: { type: "string", title: "Fecha de ingreso" },
+      telefono_movil: { type: "string", title: "Teléfono móvil" },
+    });
+    expect(schema.required).toEqual(["telefono_movil"]);
+  });
+
+  it("keeps the stored key when the label of a loaded property changes", () => {
+    const [loaded] = propertiesFromJsonSchema(
+      {
+        type: "object",
+        properties: {
+          fecha_de_ingreso: { type: "string", title: "Fecha de ingreso" },
+        },
+      },
+      sequentialId(),
+    );
+
+    expect(loaded.name).toBe("Fecha de ingreso");
+
+    const schema = createJsonSchema("Persona", [
+      { ...loaded, name: "Fecha de ingreso al cargo" },
+    ]);
+
+    expect(Object.keys(schema.properties ?? {})).toEqual(["fecha_de_ingreso"]);
+    expect(schema.properties?.fecha_de_ingreso.title).toBe(
+      "Fecha de ingreso al cargo",
+    );
+  });
+
+  it("preserves legacy keys without a title", () => {
+    const properties = propertiesFromJsonSchema(
+      { type: "object", properties: { fechaIngreso: { type: "string" } } },
+      sequentialId(),
+    );
+
+    expect(properties[0].name).toBe("fechaIngreso");
+    expect(
+      Object.keys(createJsonSchema("S", properties).properties ?? {}),
+    ).toEqual(["fechaIngreso"]);
+  });
+
+  it("keeps sample JSON keys verbatim", () => {
+    const properties = importProperties('{ "firstName": "Ada" }');
+
+    expect(properties[0]).toMatchObject({ name: "firstName", key: "firstName" });
+  });
+
+  it("rejects keys that collide or normalize to nothing", () => {
+    const collision = validateSchema("S", [node("a", "Año"), node("b", "Ano")]);
+    const empty = validateSchema("S", [node("a", "???")]);
+
+    expect(collision.isValid).toBe(false);
+    expect(collision.errors).toContain(
+      'Root cannot contain duplicate property names: "Año", "Ano".',
+    );
+    expect(empty.isValid).toBe(false);
+    expect(empty.errors).toContain(
+      "Root property 1 needs a name with letters or digits.",
+    );
+  });
+
+  it("allows the same label in different objects", () => {
+    const result = validateSchema("S", [
+      node("o1", "A", {
+        type: "object",
+        properties: [node("n1", "Nombre")],
+      }),
+      node("o2", "B", {
+        type: "object",
+        properties: [node("n2", "Nombre")],
+      }),
+    ]);
+
+    expect(result.isValid).toBe(true);
   });
 });

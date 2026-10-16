@@ -7,6 +7,7 @@ import {
   createInitialValues,
   deriveFormFields,
   formValuesFromJson,
+  labelFieldPaths,
   removeArrayItem,
   setValueAtPath,
   validateFormValues,
@@ -39,24 +40,82 @@ describe("deriveFormFields", () => {
     const fields = deriveFormFields(schema);
 
     expect(fields).toEqual([
-      { name: "name", type: "string", required: true },
+      { name: "name", label: "name", type: "string", required: true },
       {
         name: "profile",
+        label: "profile",
         type: "object",
         required: true,
-        properties: [{ name: "email", type: "string", required: true }],
+        properties: [
+          { name: "email", label: "email", type: "string", required: true },
+        ],
       },
       {
         name: "tags",
+        label: "tags",
         type: "array",
         required: false,
         items: {
           name: "items",
+          label: "items",
           type: "object",
           required: false,
-          properties: [{ name: "label", type: "string", required: true }],
+          properties: [
+            { name: "label", label: "label", type: "string", required: true },
+          ],
         },
       },
+    ]);
+  });
+
+  it("uses the property title as label and falls back to the key", () => {
+    const fields = deriveFormFields({
+      type: "object",
+      properties: {
+        fecha_de_ingreso: { type: "string", title: "Fecha de ingreso" },
+        direccion_actual: {
+          type: "object",
+          title: "Dirección actual",
+          properties: { ciudad: { type: "string", title: "Ciudad" } },
+        },
+        age: { type: "integer" },
+      },
+      required: ["fecha_de_ingreso"],
+    });
+
+    expect(fields[0]).toMatchObject({
+      name: "fecha_de_ingreso",
+      label: "Fecha de ingreso",
+      required: true,
+    });
+    expect(fields[1]).toMatchObject({ label: "Dirección actual" });
+    expect(fields[1].properties?.[0]).toMatchObject({
+      name: "ciudad",
+      label: "Ciudad",
+    });
+    expect(fields[2]).toMatchObject({ name: "age", label: "age" });
+  });
+
+  it("keeps values keyed by the property key and reports labels for missing fields", () => {
+    const fields = deriveFormFields({
+      type: "object",
+      properties: {
+        direccion_actual: {
+          type: "object",
+          title: "Dirección actual",
+          properties: { ciudad: { type: "string", title: "Ciudad" } },
+          required: ["ciudad"],
+        },
+      },
+    });
+    const validation = validateFormValues(fields, createInitialValues(fields));
+
+    expect(Object.keys(createInitialValues(fields))).toEqual([
+      "direccion_actual",
+    ]);
+    expect(validation.missingFields).toEqual(["direccion_actual.ciudad"]);
+    expect(labelFieldPaths(fields, validation.missingFields)).toEqual([
+      "Dirección actual.Ciudad",
     ]);
   });
 });

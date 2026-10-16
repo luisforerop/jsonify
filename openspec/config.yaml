@@ -2,22 +2,26 @@ schema: spec-driven
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Idioma: todos los artefactos de OpenSpec (proposal, specs, design, tasks)
+  se escriben en español. Mantén en inglés únicamente lo que el formato o el
+  código exigen: los encabezados estructurales (## Why, ## What Changes,
+  ## ADDED Requirements, ### Requirement:, #### Scenario:), las palabras clave
+  normativas SHALL/MUST, WHEN/THEN, y los identificadores de código, rutas,
+  nombres de capabilities y claves JSON.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - Escribe el contenido en español; conserva los encabezados de la plantilla tal como están.
+  specs:
+    - Escribe las descripciones y escenarios en español; conserva en inglés "### Requirement:", "#### Scenario:", SHALL/MUST y WHEN/THEN.
+    - Conserva en inglés los nombres de requirements existentes al usar MODIFIED/REMOVED/RENAMED para que coincidan con la spec principal.
+  design:
+    - Escribe el contenido en español; conserva los encabezados de la plantilla tal como están.
+  tasks:
+    - Escribe las tareas en español; conserva el formato de checkbox "- [ ] N.M".
 
 # Per-operation guidance (optional)
 # Add advisory guidance for how apply and archive work should be conducted.

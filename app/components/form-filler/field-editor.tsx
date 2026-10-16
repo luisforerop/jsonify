@@ -60,7 +60,7 @@ function FieldEditor({
     return (
       <fieldset className="field-object">
         <legend>
-          {field.name}
+          {field.label}
           {field.required && <span className="required-mark">*</span>}
         </legend>
         <FieldGroup
@@ -83,7 +83,7 @@ function FieldEditor({
     return (
       <fieldset className="field-array">
         <legend>
-          {field.name}
+          {field.label}
           {field.required && <span className="required-mark">*</span>}
         </legend>
         <ArrayItems
@@ -102,7 +102,7 @@ function FieldEditor({
   return (
     <label className={isMissing ? "field-scalar is-missing" : "field-scalar"}>
       <span>
-        {field.name}
+        {field.label}
         {field.required && <span className="required-mark">*</span>}
       </span>
       <ScalarInput

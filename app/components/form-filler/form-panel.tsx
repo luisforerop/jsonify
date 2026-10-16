@@ -1,3 +1,4 @@
+import { labelFieldPaths } from "@/lib/schema-form";
 import type {
   FormField,
   FormPathSegment,
@@ -102,7 +103,8 @@ export function FormPanel({
         <div className="feedback-area" aria-live="polite">
           {missingFields.length > 0 && (
             <p className="feedback error">
-              Fill in required fields: {missingFields.join(", ")}
+              Fill in required fields:{" "}
+              {labelFieldPaths(fields, missingFields).join(", ")}
             </p>
           )}
           {persistenceError && (

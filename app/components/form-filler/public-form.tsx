@@ -7,6 +7,7 @@ import {
   addArrayItem,
   createInitialValues,
   deriveFormFields,
+  labelFieldPaths,
   removeArrayItem,
   setValueAtPath,
   validateFormValues,
@@ -151,7 +152,8 @@ export function PublicForm({ schemaId, schemaName, schema }: PublicFormProps) {
         <div className="feedback-area" aria-live="polite">
           {missingFields.length > 0 && (
             <p className="feedback error">
-              Fill in required fields: {missingFields.join(", ")}
+              Fill in required fields:{" "}
+              {labelFieldPaths(fields, missingFields).join(", ")}
             </p>
           )}
           {errors.map((message) => (

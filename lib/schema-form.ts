@@ -6,6 +6,8 @@ import {
 
 export type FormField = {
   name: string;
+  /** Text shown to the person filling the form: the schema `title`, else the key. */
+  label: string;
   type: JsonSchemaType | "enum";
   required: boolean;
   options?: string[];
@@ -50,8 +52,10 @@ function formFieldFromJsonSchema(
     : JSON_SCHEMA_TYPES.includes(schema.type)
       ? schema.type
       : "string";
+  const title = typeof schema.title === "string" ? schema.title.trim() : "";
   const field: FormField = {
     name,
+    label: title || name,
     type,
     required: requiredNames.includes(name),
   };
@@ -73,6 +77,27 @@ function formFieldFromJsonSchema(
   }
 
   return field;
+}
+
+/** Converts key paths (`a.b`) into the label paths shown to the user. */
+export function labelFieldPaths(
+  fields: FormField[],
+  paths: string[],
+): string[] {
+  return paths.map((path) => {
+    const labels: string[] = [];
+    let level: FormField[] | undefined = fields;
+
+    for (const segment of path.split(".")) {
+      const field: FormField | undefined = level?.find(
+        (candidate) => candidate.name === segment,
+      );
+      labels.push(field?.label ?? segment);
+      level = field?.properties;
+    }
+
+    return labels.join(".");
+  });
 }
 
 export function createInitialValues(fields: FormField[]): FormValues {
